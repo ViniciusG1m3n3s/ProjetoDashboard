@@ -5,19 +5,17 @@ import math
 import streamlit as st
 
 def load_data(usuario):
-    excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
-    if os.path.exists(excel_file):
-        df_total = pd.read_excel(excel_file, engine='openpyxl')
+    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
+    if os.path.exists(parquet_file):
+        df_total = pd.read_parquet(parquet_file)
     else:
         df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Status', 'Tempo de Análise', 'Próximo'])
     return df_total
 
 # Função para salvar os dados no Excel do usuário logado
 def save_data(df, usuario):
-    excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
-    df['Tempo de Análise'] = df['Tempo de Análise'].astype(str)
-    with pd.ExcelWriter(excel_file, engine='openpyxl', mode='w') as writer:
-        df.to_excel(writer, index=False)
+    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
+    df.to_parquet(parquet_file, index=False)
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = df['Próximo'].dt.date
