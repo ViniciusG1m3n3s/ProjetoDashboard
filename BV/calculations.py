@@ -8,8 +8,7 @@ import locale
 locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil.1252')
 
 def load_data(usuario):
-    pasta_bv = 'BV'  # Defina o caminho da pasta 'BV'
-    parquet_file = os.path.join(pasta_bv, f'dados_acumulados_{usuario}.parquet')  # Caminho completo do arquivo
+    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho completo do arquivo
     # Verifica se o arquivo existe e se está intacto
     try:
         if os.path.exists(parquet_file):
@@ -33,8 +32,7 @@ def load_data(usuario):
 
 # Função para salvar os dados no Parquet do usuário logado
 def save_data(df, usuario):
-    pasta_bv = 'BV'  # Defina o caminho da pasta 'BV'
-    parquet_file = os.path.join(pasta_bv, f'dados_acumulados_{usuario}.parquet')  # Nome do arquivo específico do usuário
+    parquet_file = f'dados_acumulados_{usuario}.parquet' # Nome do arquivo específico do usuário
     df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)
     df.to_parquet(parquet_file, index=False)
 
