@@ -8,8 +8,7 @@ import locale
 locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil.1252')
 
 def load_data(usuario):
-    pasta_itau = 'Itau'  # Defina o caminho da pasta 'Itau'
-    excel_file = os.path.join(pasta_itau, f'dados_acumulados_{usuario}.xlsx')  # Caminho completo do arquivo
+    excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
     if os.path.exists(excel_file):
         df_total = pd.read_excel(excel_file, engine='openpyxl')
     else:
@@ -18,8 +17,7 @@ def load_data(usuario):
 
 # Função para salvar os dados no Excel do usuário logado
 def save_data(df, usuario):
-    pasta_itau = 'Itau'  # Defina o caminho da pasta 'Itau'
-    excel_file = os.path.join(pasta_itau, f'dados_acumulados_{usuario}.xlsx')  # Caminho completo do arquivo
+    excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
     df['Tempo de Análise'] = df['Tempo de Análise'].astype(str)
     with pd.ExcelWriter(excel_file, engine='openpyxl', mode='w') as writer:
         df.to_excel(writer, index=False)
