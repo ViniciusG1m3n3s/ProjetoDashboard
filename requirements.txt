@@ -3,4 +3,3 @@ pandas
 plotly
 streamlit-extras
 openpyxl
-locale
