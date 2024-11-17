@@ -12,7 +12,7 @@ def dashboard():
     usuario_logado = st.session_state.usuario_logado
     df_total = load_data(usuario_logado)
 
-    st.logo("https://finchsolucoes.com.br/img/fefdd9df-1bd3-4107-ab22-f06d392c1f55.png")
+    st.logo("finch.png")
 
     # Sidebar
     st.sidebar.header("Navegação")
