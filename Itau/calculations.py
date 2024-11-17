@@ -5,7 +5,7 @@ import math
 import streamlit as st
 import locale
 
-locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil.1252')
+locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
 
 def load_data(usuario):
     excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
