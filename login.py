@@ -9,7 +9,7 @@ def autenticar(usuario, senha):
 
 # Função para carregar o dashboard dependendo do domínio do usuário
 def login():
-    st.logo("https://finchsolucoes.com.br/img/fefdd9df-1bd3-4107-ab22-f06d392c1f55.png")
+    st.logo("finch.png")
     st.sidebar.header("Login")
     usuario = st.sidebar.text_input("Usuário")
     senha = st.sidebar.text_input("Senha", type="password")
