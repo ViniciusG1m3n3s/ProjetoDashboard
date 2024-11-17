@@ -3,9 +3,6 @@ import os
 import plotly.express as px
 import math
 import streamlit as st
-import locale
-
-locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil.1252')
 
 def load_data(usuario):
     parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho completo do arquivo
