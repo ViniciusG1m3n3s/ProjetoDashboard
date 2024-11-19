@@ -5,11 +5,11 @@ import math
 import streamlit as st
 
 def load_data(usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho completo do arquivo
+    excel_file = f'dados_acumulados_{usuario}.xlsx'  # Caminho completo do arquivo
     # Verifica se o arquivo existe e se está intacto
     try:
-        if os.path.exists(parquet_file):
-            df_total = pd.read_parquet(parquet_file)
+        if os.path.exists(excel_file):
+            df_total = pd.read_excel(excel_file)
         else:
             raise FileNotFoundError
         
@@ -23,15 +23,15 @@ def load_data(usuario):
             'DATA DE CONCLUSÃO DA TAREFA', 
             'FINALIZAÇÃO'
         ])
-        df_total.to_parquet(parquet_file, index=False)
+        df_total.to_excel(excel_file, index=False)
     
     return df_total
 
-# Função para salvar os dados no Parquet do usuário logado
+# Função para salvar os dados no Excel do usuário logado
 def save_data(df, usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet' # Nome do arquivo específico do usuário
+    excel_file = f'dados_acumulados_{usuario}.xlsx' # Nome do arquivo específico do usuário
     df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)
-    df.to_parquet(parquet_file, index=False)
+    df.to_excel(excel_file, index=False)
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
