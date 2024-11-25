@@ -4,7 +4,7 @@ import importlib
 
 st.set_page_config(
     page_title="Dashboard",  # Título da aba do navegador
-    page_icon="🟠",  # Favicon, você pode usar um emoji ou um caminho para um arquivo .ico
+    page_icon="📊",  # Favicon, você pode usar um emoji ou um caminho para um arquivo .ico
     layout="wide",  # Layout da página, pode ser "wide" ou "centered"
 )
 
@@ -28,6 +28,10 @@ else:
     elif dominio == "bv":
         # Carrega o dashboard da pasta BV
         dashboard_bv = importlib.import_module("BV.dashboard")
+        dashboard_bv.dashboard()  # Chama a função 'dashboard' dentro do arquivo dashboard.py da pasta BV
+    elif dominio == "maestro":
+        # Carrega o dashboard da pasta BV
+        dashboard_bv = importlib.import_module("Maestro.dashboard")
         dashboard_bv.dashboard()  # Chama a função 'dashboard' dentro do arquivo dashboard.py da pasta BV
     else:
         st.error("Usuário não autorizado para visualizar o dashboard.")
