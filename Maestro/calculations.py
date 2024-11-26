@@ -3,9 +3,6 @@ import os
 import plotly.express as px
 import math
 import streamlit as st
-import locale
-
-locale.setlocale(locale.LC_TIME, 'Portuguese_Brazil.1252')
 
 def load_data(usuario):
     excel_file = os.path.join(f'dados_acumulados_{usuario}.xlsx')  # Caminho completo do arquivo
