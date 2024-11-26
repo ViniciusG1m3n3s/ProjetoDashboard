@@ -3,7 +3,7 @@ from login import login
 import importlib
 
 st.set_page_config(
-    page_title="Dashboard | Finch",  # Título da aba do navegador
+    page_title="Dashboard",  # Título da aba do navegador
     page_icon="🟠",  # Favicon, você pode usar um emoji ou um caminho para um arquivo .ico
     layout="wide",  # Layout da página, pode ser "wide" ou "centered"
 )
