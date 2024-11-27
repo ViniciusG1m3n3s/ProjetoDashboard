@@ -3,6 +3,7 @@ import os
 import plotly.express as px
 import math
 import streamlit as st
+from io import BytesIO
 
 def load_data(usuario):
     excel_file = f'dados_acumulados_{usuario}.xlsx'  # Caminho completo do arquivo
@@ -10,28 +11,39 @@ def load_data(usuario):
     try:
         if os.path.exists(excel_file):
             df_total = pd.read_excel(excel_file)
+            
+            # Verifica se a coluna 'Justificativa' existe, caso contrário, adiciona ela
+            if 'Justificativa' not in df_total.columns:
+                df_total['Justificativa'] = ""  # Adiciona a coluna de justificativa com valores vazios
         else:
             raise FileNotFoundError
         
     except (FileNotFoundError, ValueError, OSError):
-        # Cria um DataFrame vazio e salva um novo arquivo se não existir ou se estiver corrompido
+        # Cria um DataFrame vazio com a coluna 'Justificativa' e salva um novo arquivo
         df_total = pd.DataFrame(columns=[
             'NÚMERO DO PROTOCOLO', 
             'USUÁRIO QUE CONCLUIU A TAREFA', 
             'SITUAÇÃO DA TAREFA', 
             'TEMPO MÉDIO OPERACIONAL', 
             'DATA DE CONCLUSÃO DA TAREFA', 
-            'FINALIZAÇÃO'
+            'FINALIZAÇÃO',
+            'Justificativa'  # Inclui a coluna de justificativa ao criar um novo DataFrame
         ])
         df_total.to_excel(excel_file, index=False)
     
     return df_total
 
-# Função para salvar os dados no Excel do usuário logado
 def save_data(df, usuario):
-    excel_file = f'dados_acumulados_{usuario}.xlsx' # Nome do arquivo específico do usuário
-    df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)
+    excel_file = f'dados_acumulados_{usuario}.xlsx'  # Nome do arquivo específico do usuário
+    
+    # Certifique-se de que a coluna 'Justificativa' existe antes de salvar
+    if 'Justificativa' not in df.columns:
+        df['Justificativa'] = ""  # Se não existir, adiciona a coluna com valores vazios
+    
+    # Salva o DataFrame no arquivo Excel
+    df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)  # Ajuste de tipo de coluna, se necessário
     df.to_excel(excel_file, index=False)
+
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
@@ -530,3 +542,31 @@ def exibir_dataframe_tmo_formatado(df):
     st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
     
     return df_tmo_formatado
+
+def export_dataframe(df):
+    st.subheader("Exportar Dados")
+    
+    # Seleção de colunas
+    colunas_disponiveis = list(df.columns)
+    colunas_selecionadas = st.multiselect(
+        "Selecione as colunas que deseja exportar:", colunas_disponiveis, default=[]
+    )
+    
+    # Filtrar o DataFrame pelas colunas selecionadas
+    if colunas_selecionadas:
+        df_filtrado = df[colunas_selecionadas]
+        
+        # Botão de download
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df_filtrado.to_excel(writer, index=False, sheet_name='Dados_Exportados')
+        buffer.seek(0)
+        
+        st.download_button(
+            label="Baixar Excel",
+            data=buffer,
+            file_name="dados_exportados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("Selecione pelo menos uma coluna para exportar.")

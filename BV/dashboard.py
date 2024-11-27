@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_e_exibir_protocolos_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado
+from io import BytesIO
+from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_e_exibir_protocolos_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia
 from datetime import datetime
 import streamlit as st
@@ -90,7 +91,7 @@ def dashboard():
         df_produtividade = calcular_produtividade_diaria(df_total)
         
         df_tmo = calcular_tmo_por_dia(df_total)  # Certifique-se de que essa função retorne os dados necessários para o gráfico
-
+        
         col1, col2 = st.columns(2)
 
         with col1:
@@ -151,6 +152,9 @@ def dashboard():
             
             # Exibir a tabela de ranking
             st.dataframe(styled_df_ranking, width=2000)
+        
+        with st.expander("Exportar Dados"):
+            export_dataframe(df_total)
             
     elif opcao_selecionada == "Métricas Individuais":
         st.header("Métricas Individuais")
