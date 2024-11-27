@@ -5,30 +5,29 @@ import math
 import streamlit as st
 
 def load_data(usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
-    if os.path.exists(parquet_file):
-        df_total = pd.read_parquet(parquet_file)
+    excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
+    if os.path.exists(excel_file):
+        df_total = pd.read_excel(excel_file)
     else:
-        df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Tempo', 'Início'])
+        df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Tipo', 'Tempo', 'Data'])
     return df_total
 
-# Função para salvar os dados no Excel do usuário logado
+# Fun o para salvar os dados no Excel do usu rio logado
 def save_data(df, usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
-    df.to_parquet(parquet_file, index=False)
+    excel_file = f'dados_acumulados_{usuario}.xlsx' # Caminho completo do arquivo
+    df.to_excel(excel_file, index=False)
 
 def calcular_tmo_por_dia(df):
-    df['Dia'] = df['Próximo'].dt.date
-    df_finalizados = df[df['Status'] == 'FINALIZADO'].copy()
-    df_tmo = df_finalizados.groupby('Dia').agg(
-        Tempo_Total=('Tempo de Análise', 'sum'),
-        Total_Protocolos=('Tempo de Análise', 'count')
+    df['Dia'] = df['Data']
+    df_tmo = df.groupby('Dia').agg(
+        Tempo_Total=('Tempo', 'sum'),
+        Total_Protocolos=('Tempo', 'count')
     ).reset_index()
     df_tmo['TMO'] = (df_tmo['Tempo_Total'] / pd.Timedelta(minutes=1)) / df_tmo['Total_Protocolos']
     return df_tmo[['Dia', 'TMO']]
 
 def calcular_produtividade_diaria(df):
-    df['Dia'] = df['Próximo'].dt.date
+    df['Dia'] = df['Data']
     df_produtividade = df.groupby('Dia').agg(
         Andamento=('Status', lambda x: x[x == 'ANDAMENTO_PRE'].count()),
         Finalizado=('Status', lambda x: x[x == 'FINALIZADO'].count()),
@@ -38,11 +37,8 @@ def calcular_produtividade_diaria(df):
     return df_produtividade
 
 def convert_to_timedelta_for_calculations(df):
-    df['Tempo de Análise'] = pd.to_timedelta(df['Tempo de Análise'], errors='coerce')
-    return df
-
-def convert_to_datetime_for_calculations(df):
-    df['Próximo'] = pd.to_datetime(df['Próximo'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+    # Converter diretamente de string para timedelta
+    df['Tempo'] = pd.to_timedelta(df['Tempo'], errors='coerce')
     return df
         
 def format_timedelta(td):

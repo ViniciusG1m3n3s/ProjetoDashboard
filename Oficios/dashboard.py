@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_tmo, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado
+from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, save_data, load_data, format_timedelta, calcular_tmo, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista,grafico_filas_analista, grafico_tmo_analista
 from datetime import datetime
 import streamlit as st
@@ -29,7 +29,6 @@ def dashboard():
 
     # Converte para cálculos temporários
     df_total = convert_to_timedelta_for_calculations(df_total)
-    df_total = convert_to_datetime_for_calculations(df_total)
 
     custom_colors = ['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']
 
