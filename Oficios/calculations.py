@@ -5,93 +5,44 @@ import math
 import streamlit as st
 
 def load_data(usuario):
-    excel_file = os.path.join(f'dados_acumulados_{usuario}.xlsx')  # Caminho completo do arquivo
-    # Verifica se o arquivo existe e se está intacto
-    try:
-        if os.path.exists(excel_file):
-            df_total = pd.read_excel(excel_file, engine='openpyxl')
-        else:
-            raise FileNotFoundError
-        
-    except (FileNotFoundError, ValueError, OSError):
-        # Cria um DataFrame vazio e salva um novo arquivo se não existir ou se estiver corrompido
-        df_total = pd.DataFrame(columns=[
-            'NÚMERO DO PROTOCOLO', 
-            'USUÁRIO QUE CONCLUIU A TAREFA', 
-            'SITUAÇÃO DA TAREFA', 
-            'TEMPO MÉDIO OPERACIONAL', 
-            'DATA DE CONCLUSÃO DA TAREFA', 
-            'FINALIZAÇÃO'
-        ])
-        df_total.to_excel(excel_file, index=False)
-    
+    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
+    if os.path.exists(parquet_file):
+        df_total = pd.read_parquet(parquet_file)
+    else:
+        df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Status', 'Tempo de Análise', 'Próximo'])
     return df_total
 
 # Função para salvar os dados no Excel do usuário logado
 def save_data(df, usuario):
-    excel_file = os.path.join(f'dados_acumulados_{usuario}.xlsx')  # Nome do arquivo específico do usuário
-    df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)
-    df.to_excel(excel_file, index=False)
+    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
+    df.to_parquet(parquet_file, index=False)
 
 def calcular_tmo_por_dia(df):
-    df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
-    df_finalizados = df[df['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])].copy()
-    
-    # Agrupando por dia
+    df['Dia'] = df['Próximo'].dt.date
+    df_finalizados = df[df['Status'] == 'FINALIZADO'].copy()
     df_tmo = df_finalizados.groupby('Dia').agg(
-        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),  # Soma total do tempo
-        Total_Finalizados_Cancelados=('SITUAÇÃO DA TAREFA', 'count')  # Total de tarefas finalizadas ou canceladas
+        Tempo_Total=('Tempo de Análise', 'sum'),
+        Total_Protocolos=('Tempo de Análise', 'count')
     ).reset_index()
-
-    # Calcula o TMO (Tempo Médio Operacional)
-    df_tmo['TMO'] = df_tmo['Tempo_Total'] / df_tmo['Total_Finalizados_Cancelados']
-    
-    # Formata o tempo médio no formato HH:MM:SS
-    df_tmo['TMO'] = df_tmo['TMO'].apply(format_timedelta)
+    df_tmo['TMO'] = (df_tmo['Tempo_Total'] / pd.Timedelta(minutes=1)) / df_tmo['Total_Protocolos']
     return df_tmo[['Dia', 'TMO']]
 
-def calcular_tmo_por_dia_geral(df):
-    # Certifica-se de que a coluna de data está no formato correto
-    df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
-
-    # Filtra tarefas finalizadas ou canceladas, pois estas são relevantes para o cálculo do TMO
-    df_finalizados = df[df['SITUAÇÃO DA TAREFA'].isin(['Finalizado', 'Cancelada'])].copy()
-    
-    # Agrupamento por dia para calcular o tempo médio diário
-    df_tmo = df_finalizados.groupby('Dia').agg(
-        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),  # Soma total do tempo por dia
-        Total_Finalizados_Cancelados=('SITUAÇÃO DA TAREFA', 'count')  # Total de tarefas finalizadas/canceladas por dia
-    ).reset_index()
-
-    # Calcula o TMO (Tempo Médio Operacional) diário
-    df_tmo['TMO'] = df_tmo['Tempo_Total'] / df_tmo['Total_Finalizados_Cancelados']
-    
-    # Remove valores nulos e formata o tempo médio para o gráfico
-    df_tmo['TMO'] = df_tmo['TMO'].fillna(pd.Timedelta(seconds=0))  # Preenche com zero se houver NaN
-    df_tmo['TMO_Formatado'] = df_tmo['TMO'].apply(format_timedelta)  # Formata para exibição
-    
-    return df_tmo[['Dia', 'TMO', 'TMO_Formatado']]
-
 def calcular_produtividade_diaria(df):
-    # Garante que a coluna 'Próximo' esteja em formato de data
-    df['Dia'] = df['DATA DE CONCLUSÃO DA TAREFA'].dt.date
-
-    # Agrupa e soma os status para calcular a produtividade
+    df['Dia'] = df['Próximo'].dt.date
     df_produtividade = df.groupby('Dia').agg(
-        Finalizado=('SITUAÇÃO DA TAREFA', lambda x: x[x == 'Finalizada'].count()),
-        Cancelada=('SITUAÇÃO DA TAREFA', lambda x: x[x == 'Cancelada'].count())
+        Andamento=('Status', lambda x: x[x == 'ANDAMENTO_PRE'].count()),
+        Finalizado=('Status', lambda x: x[x == 'FINALIZADO'].count()),
+        Reclassificado=('Status', lambda x: x[x == 'RECLASSIFICADO'].count())
     ).reset_index()
-
-    # Calcula a produtividade total
-    df_produtividade['Produtividade'] = + df_produtividade['Finalizado'] + df_produtividade['Cancelada']
+    df_produtividade['Produtividade'] = df_produtividade['Andamento'] + df_produtividade['Finalizado'] + df_produtividade['Reclassificado']
     return df_produtividade
 
 def convert_to_timedelta_for_calculations(df):
-    df['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
+    df['Tempo de Análise'] = pd.to_timedelta(df['Tempo de Análise'], errors='coerce')
     return df
 
 def convert_to_datetime_for_calculations(df):
-    df['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+    df['Próximo'] = pd.to_datetime(df['Próximo'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
     return df
         
 def format_timedelta(td):
@@ -102,68 +53,30 @@ def format_timedelta(td):
     return f"{minutes} min {seconds}s"
 
 # Função para calcular o TMO por analista
-def calcular_tmo_por_dia(df):
-    df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
-    df_finalizados = df[df['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])].copy()
-    
-    # Agrupando por dia
-    df_tmo = df_finalizados.groupby('Dia').agg(
-        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),  # Soma total do tempo
-        Total_Finalizados_Cancelados=('SITUAÇÃO DA TAREFA', 'count')  # Total de tarefas finalizadas ou canceladas
+def calcular_tmo(df_total):
+    # Calcula o TMO por analista
+    users_tmo = df_total['Usuário'].unique()
+    df_tmo_analista = df_total[df_total['Usuário'].isin(users_tmo)].groupby('Usuário').agg(
+        Tempo_Total=('Tempo de Análise', 'sum'),
+        Total_Protocolos=('Tempo de Análise', 'count')
     ).reset_index()
+    df_tmo_analista['TMO'] = df_tmo_analista['Tempo_Total'] / df_tmo_analista['Total_Protocolos']
+    df_tmo_analista['TMO_Formatado'] = df_tmo_analista['TMO'].apply(lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02}")
 
-    # Calcula o TMO (Tempo Médio Operacional)
-    df_tmo['TMO'] = df_tmo['Tempo_Total'] / df_tmo['Total_Finalizados_Cancelados']
-    
-    # Formata o tempo médio no formato HH:MM:SS
-    df_tmo['TMO'] = df_tmo['TMO'].apply(format_timedelta)
-    return df_tmo[['Dia', 'TMO']]
-
-# Função para calcular o TMO por analista
-def calcular_tmo(df):
-    # Verifica se a coluna 'SITUAÇÃO DA TAREFA' existe no DataFrame
-    if 'SITUAÇÃO DA TAREFA' not in df.columns:
-        raise KeyError("A coluna 'SITUAÇÃO DA TAREFA' não foi encontrada no DataFrame.")
-
-    # Filtra as tarefas finalizadas ou canceladas
-    df_finalizados = df[df['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])].copy()
-
-    # Verifica se a coluna 'TEMPO MÉDIO OPERACIONAL' existe e converte para minutos
-    if 'TEMPO MÉDIO OPERACIONAL' not in df_finalizados.columns:
-        raise KeyError("A coluna 'TEMPO MÉDIO OPERACIONAL' não foi encontrada no DataFrame.")
-    df_finalizados['TEMPO_MÉDIO_MINUTOS'] = df_finalizados['TEMPO MÉDIO OPERACIONAL'].dt.total_seconds() / 60
-
-    # Verifica se a coluna 'FILA' existe antes de aplicar o filtro
-    if 'FILA' in df_finalizados.columns:
-        # Remove protocolos da fila "DÚVIDA" com mais de 1 hora de tempo médio
-        df_finalizados = df_finalizados[~((df_finalizados['FILA'] == 'DÚVIDA') & (df_finalizados['TEMPO_MÉDIO_MINUTOS'] > 60))]
-
-    # Agrupando por analista
-    df_tmo_analista = df_finalizados.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
-        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),  # Soma total do tempo por analista
-        Total_Tarefas=('SITUAÇÃO DA TAREFA', 'count')  # Total de tarefas finalizadas ou canceladas por analista
-    ).reset_index()
-
-    # Calcula o TMO (Tempo Médio Operacional) como média
-    df_tmo_analista['TMO'] = df_tmo_analista['Tempo_Total'] / df_tmo_analista['Total_Tarefas']
-
-    # Formata o tempo médio no formato de minutos e segundos
-    df_tmo_analista['TMO_Formatado'] = df_tmo_analista['TMO'].apply(format_timedelta)
-
-    return df_tmo_analista[['USUÁRIO QUE CONCLUIU A TAREFA', 'TMO_Formatado', 'TMO']]
+    return df_tmo_analista
 
 # Função para calcular o ranking dinâmico
 def calcular_ranking(df_total, selected_users):
     # Filtra o DataFrame com os usuários selecionados
-    df_filtered = df_total[df_total['USUÁRIO QUE CONCLUIU A TAREFA'].isin(selected_users)]
+    df_filtered = df_total[df_total['Usuário'].isin(selected_users)]
 
-    df_ranking = df_filtered.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
-
-        Finalizado=('SITUAÇÃO DA TAREFA', lambda x: x[x == 'Finalizada'].count()),
-        Cancelada=('SITUAÇÃO DA TAREFA', lambda x: x[x == 'Cancelaao'].count())
+    df_ranking = df_filtered.groupby('Usuário').agg(
+        Andamento=('Status', lambda x: x[x == 'ANDAMENTO_PRE'].count()),
+        Finalizado=('Status', lambda x: x[x == 'FINALIZADO'].count()),
+        Reclassificado=('Status', lambda x: x[x == 'RECLASSIFICADO'].count())
     ).reset_index()
-    df_ranking['Total'] =df_ranking['Finalizado'] + df_ranking['Cancelada']
-    df_ranking = df_ranking.sort_values(by  ='Total', ascending=False).reset_index(drop=True)
+    df_ranking['Total'] = df_ranking['Andamento'] + df_ranking['Finalizado'] + df_ranking['Reclassificado']
+    df_ranking = df_ranking.sort_values(by='Total', ascending=False).reset_index(drop=True)
     df_ranking.index += 1
     df_ranking.index.name = 'Posição'
 
@@ -190,40 +103,45 @@ def calcular_ranking(df_total, selected_users):
 
     return styled_df_ranking
 
+def calcular_tempo_medio_analista(df_analista):
+    # Filtra as linhas com status 'FINALIZADO', 'RECLASSIFICADO' ou 'ANDAMENTO_PRE'
+    df_filtrado = df_analista[df_analista['Status'].isin(['FINALIZADO', 'RECLASSIFICADO', 'ANDAMENTO_PRE'])]
+    
+    # Calcula o tempo médio de análise considerando os status filtrados
+    tempo_medio_analista = df_filtrado['Tempo de Análise'].mean()
+    
+    # Se o tempo médio for válido, formate-o
+    if pd.notna(tempo_medio_analista):
+        return format_timedelta(tempo_medio_analista)  # Supondo que format_timedelta já formate de acordo
+    else:
+        return 'Nenhum dado encontrado'
+
 #MÉTRICAS INDIVIDUAIS
 def calcular_metrica_analista(df_analista):
-    # Verifica se as colunas necessárias estão presentes no DataFrame
-    colunas_necessarias = ['FILA', 'SITUAÇÃO DA TAREFA', 'TEMPO MÉDIO OPERACIONAL']
-    for coluna in colunas_necessarias:
-        if coluna not in df_analista.columns:
-            st.warning(f"A coluna '{coluna}' não está disponível nos dados. Verifique o arquivo carregado.")
-            return None, None, None
+    # Verifica se a coluna "Carteira" está presente no DataFrame
+    if 'Carteira' not in df_analista.columns:
+        st.warning("A coluna 'Carteira' não está disponível nos dados. Verifique o arquivo carregado.")
+        return None, None, None, None
 
-    # Excluir os registros com "FILA" como "Desconhecida"
-    df_analista_filtrado = df_analista[df_analista['FILA'] != "Desconhecida"]
+    # Excluir os registros com "Carteira" como "Desconhecida"
+    df_analista_filtrado = df_analista[df_analista['Carteira'] != "Desconhecida"]
 
-    # Filtrar os registros com status "Finalizada" e "Cancelada"
-    df_filtrados = df_analista_filtrado[df_analista_filtrado['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])]
-
-    # Converter "TEMPO MÉDIO OPERACIONAL" para minutos
-    df_filtrados['TEMPO_MÉDIO_MINUTOS'] = df_filtrados['TEMPO MÉDIO OPERACIONAL'].dt.total_seconds() / 60
-
-    # Excluir registros da fila "DÚVIDA" com tempo médio superior a 1 hora
-    df_filtrados = df_filtrados[~((df_filtrados['FILA'] == 'DÚVIDA') & (df_filtrados['TEMPO_MÉDIO_MINUTOS'] > 60))]
+    # Filtra os registros com status "FINALIZADO" e "RECLASSIFICADO" (desconsiderando "ANDAMENTO_PRE")
+    df_filtrados = df_analista_filtrado[df_analista_filtrado['Status'].isin(['FINALIZADO', 'RECLASSIFICADO'])]
 
     # Calcula totais conforme os filtros de status
-    total_finalizados = len(df_filtrados[df_filtrados['SITUAÇÃO DA TAREFA'] == 'Finalizada'])
-    total_reclass = len(df_filtrados[df_filtrados['SITUAÇÃO DA TAREFA'] == 'Cancelada'])
+    total_finalizados = len(df_filtrados[df_filtrados['Status'] == 'FINALIZADO'])
+    total_reclass = len(df_filtrados[df_filtrados['Status'] == 'RECLASSIFICADO'])
+    total_andamento = len(df_analista[df_analista['Status'] == 'ANDAMENTO_PRE'])
 
-    # Calcula o tempo total de análise considerando "Finalizada" e "Cancelada" apenas
-    tempo_total_analista = df_filtrados['TEMPO MÉDIO OPERACIONAL'].sum()
-    total_tarefas = total_finalizados + total_reclass
-    tempo_medio_analista = tempo_total_analista / total_tarefas if total_tarefas > 0 else 0
+    # Calcula o tempo total de análise considerando "FINALIZADO" e "RECLASSIFICADO" apenas
+    tempo_total_analista = df_filtrados[df_filtrados['Status'] == 'FINALIZADO']['Tempo de Análise'].sum()
+    tempo_medio_analista = tempo_total_analista / total_finalizados  if total_finalizados > 0 else 0
 
-    return total_finalizados, total_reclass, tempo_medio_analista
+    return total_finalizados, total_reclass, total_andamento, tempo_medio_analista
 
 def calcular_tmo_equipe(df_total):
-    return df_total[df_total['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])]['TEMPO MÉDIO OPERACIONAL'].mean()
+    return df_total[df_total['Status'] == 'FINALIZADO']['Tempo de Análise'].mean()
 
 def calcular_filas_analista(df_analista):
     if 'Carteira' in df_analista.columns:
@@ -256,8 +174,8 @@ def calcular_filas_analista(df_analista):
 
 def calcular_tmo_por_dia(df_analista):
     # Lógica para calcular o TMO por dia
-    df_analista['Dia'] = df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.date
-    tmo_por_dia = df_analista.groupby('Dia').agg(TMO=('TEMPO MÉDIO OPERACIONAL', 'mean')).reset_index()
+    df_analista['Dia'] = df_analista['Próximo'].dt.date
+    tmo_por_dia = df_analista.groupby('Dia').agg(TMO=('Tempo de Análise', 'mean')).reset_index()
     return tmo_por_dia
 
 def calcular_carteiras_analista(df_analista):
@@ -319,152 +237,38 @@ def get_points_of_attention(df):
     return pontos_de_atencao
 
 def calcular_tmo_por_carteira(df):
-    # Verifica se as colunas 'FILA' e 'TEMPO MÉDIO OPERACIONAL' estão no DataFrame
-    if 'FILA' not in df.columns or 'TEMPO MÉDIO OPERACIONAL' not in df.columns:
-        return "As colunas 'FILA' e/ou 'TEMPO MÉDIO OPERACIONAL' não foram encontradas no DataFrame."
+    # Verifica se as colunas 'Carteira' e 'Tempo de Análise' estão no DataFrame
+    if 'Carteira' not in df.columns or 'Tempo de Análise' not in df.columns:
+        return "As colunas 'Carteira' e/ou 'Tempo de Análise' não foram encontradas no DataFrame."
 
-    # Remove linhas com valores NaN na coluna 'TEMPO MÉDIO OPERACIONAL'
-    df = df.dropna(subset=['TEMPO MÉDIO OPERACIONAL'])
-
-    # Verifica se os valores da coluna 'TEMPO MÉDIO OPERACIONAL' são do tipo timedelta
-    if not all(isinstance(x, pd.Timedelta) for x in df['TEMPO MÉDIO OPERACIONAL']):
-        return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
-
-    # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
-    tmo_por_carteira = df.groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
+    # Agrupa os dados por carteira e calcula o tempo médio de análise para cada grupo
+    tmo_por_carteira = df.groupby('Carteira')['Tempo de Análise'].mean().reset_index()
 
     # Converte o tempo médio de análise para minutos e segundos
-    tmo_por_carteira['TMO'] = tmo_por_carteira['TEMPO MÉDIO OPERACIONAL'].apply(
+    tmo_por_carteira['TMO'] = tmo_por_carteira['Tempo de Análise'].apply(
         lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
     )
 
     # Seleciona apenas as colunas de interesse
-    tmo_por_carteira = tmo_por_carteira[['FILA', 'TMO']]
+    tmo_por_carteira = tmo_por_carteira[['Carteira', 'TMO']]
 
     return tmo_por_carteira
 
-def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
-    """
-    Calcula e exibe o TMO médio por fila, junto com a quantidade de tarefas realizadas, 
-    para um analista específico, na dashboard Streamlit.
-
-    Parâmetros:
-        - df_analista: DataFrame contendo os dados de análise.
-        - analista_selecionado: Nome do analista selecionado.
-        - format_timedelta: Função para formatar a duração do TMO em minutos e segundos.
-        - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
-    """
-    if 'FILA' in df_analista.columns:
-        # Filtrar apenas as tarefas finalizadas para cálculo do TMO
-        filas_finalizadas_analista = df_analista[df_analista['SITUAÇÃO DA TAREFA'] == 'Finalizada']
-        
-        # Agrupa por 'FILA' e calcula a quantidade e o TMO médio para cada fila
-        carteiras_analista = filas_finalizadas_analista.groupby('FILA').agg(
-            Quantidade=('FILA', 'size'),
-            TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean')
-        ).reset_index()
-
-        # Converte o TMO médio para minutos e segundos
-        carteiras_analista['TMO_médio'] = carteiras_analista['TMO_médio'].apply(format_timedelta)
-
-        # Renomeia as colunas
-        carteiras_analista = carteiras_analista.rename(columns={
-            'FILA': 'Fila', 
-            'Quantidade': 'Quantidade', 
-            'TMO_médio': 'TMO Médio por Fila'
-        })
-        
-        # Configura o estilo do DataFrame para alinhar o conteúdo à esquerda
-        styled_df = carteiras_analista.style.format({'Quantidade': '{:.0f}', 'TMO Médio por Fila': '{:s}'}).set_properties(**{'text-align': 'left'})
-        styled_df = styled_df.set_table_styles([dict(selector='th', props=[('text-align', 'left')])])
-
-        # Exibe a tabela com as colunas Fila, Quantidade e TMO Médio
-        st.subheader(f"Filas Realizadas por {analista_selecionado}")
-        st.dataframe(styled_df, hide_index=True, width=1080)
-    else:
-        st.write("A coluna 'FILA' não foi encontrada no dataframe.")
-        carteiras_analista = pd.DataFrame({'Fila': [], 'Quantidade': [], 'TMO Médio por Fila': []})
-        styled_df = carteiras_analista.style.format({'Quantidade': '{:.0f}', 'TMO Médio por Fila': '{:s}'}).set_properties(**{'text-align': 'left'})
-        styled_df = styled_df.set_table_styles([dict(selector='th', props=[('text-align', 'left')])])
-        st.dataframe(styled_df, hide_index=True, width=1080)
-        
-def calcular_e_exibir_protocolos_por_fila(df_analista, analista_selecionado, format_timedelta, st):
-    """
-    Calcula e exibe informações detalhadas sobre protocolos por fila, incluindo a quantidade de pastas,
-    requisições, ID Projuris e tempo médio operacional (TMO), na dashboard Streamlit.
-
-    Parâmetros:
-        - df_analista: DataFrame contendo os dados de análise.
-        - analista_selecionado: Nome do analista selecionado.
-        - format_timedelta: Função para formatar a duração do TMO em minutos e segundos.
-        - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
-    """
-    # Verificar se o DataFrame possui as colunas necessárias
-    if not df_analista.empty and 'NÚMERO DO PROTOCOLO' in df_analista.columns and 'FILA' in df_analista.columns:
-        # Filtrar apenas as tarefas finalizadas para cálculo do TMO
-        filas_finalizadas_analista = df_analista[df_analista['SITUAÇÃO DA TAREFA'] == 'Finalizada']
-
-        # Contar a quantidade de pastas preenchidas para cada protocolo
-        pasta_columns = [col for col in filas_finalizadas_analista.columns if col.startswith('PASTA')]
-        filas_finalizadas_analista['Quantidade de Pastas'] = filas_finalizadas_analista[pasta_columns].notna().sum(axis=1)
-
-        # Verificar a quantidade de requisições
-        filas_finalizadas_analista['Número de Requisições'] = filas_finalizadas_analista['NÚMERO REQUISIÇÃO'].notna().astype(int)
-        filas_finalizadas_analista['ID Projuris'] = filas_finalizadas_analista['ID PROJURIS'].notna().astype(int)
-
-        # Agrupar os dados por 'NÚMERO DO PROTOCOLO' e 'FILA'
-        protocolos_analista = filas_finalizadas_analista.groupby(['NÚMERO DO PROTOCOLO', 'FILA']).agg(
-            Quantidade_de_Pastas=('Quantidade de Pastas', 'first'),
-            Número_de_Requisições=('Número de Requisições', 'first'),
-            ID_Projuris=('ID Projuris', 'first'),
-            TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean')
-        ).reset_index()
-
-        # Ajustar a quantidade de pastas para exibir 0 caso não haja pastas
-        protocolos_analista['Quantidade_de_Pastas'] = protocolos_analista['Quantidade_de_Pastas'].fillna(0)
-
-        # Converter o TMO médio para minutos e segundos
-        protocolos_analista['TMO_médio'] = protocolos_analista['TMO_médio'].apply(format_timedelta)
-
-        # Renomear as colunas para exibição
-        protocolos_analista = protocolos_analista.rename(columns={
-            'NÚMERO DO PROTOCOLO': 'Número do Protocolo',
-            'FILA': 'Fila',
-            'Quantidade_de_Pastas': 'Quantidade de Pastas',
-            'Número_de_Requisições': 'Número de Requisições',
-            'ID_Projuris': 'ID Projuris',
-            'TMO_médio': 'Tempo de Análise por Protocolo'
-        })
-
-        # Configurar o estilo do DataFrame para alinhamento à esquerda
-        styled_df = protocolos_analista.style.format({
-            'Quantidade de Pastas': '{:.0f}',
-            'Número de Requisições': '{:.0f}',
-            'Tempo de Análise por Protocolo': '{:s}'
-        }).set_properties(**{'text-align': 'left'})
-        styled_df = styled_df.set_table_styles([dict(selector='th', props=[('text-align', 'left')])])
-
-        # Exibir a tabela com as colunas solicitadas
-        st.subheader(f"Quantidade de Pastas e Requisições por Protocolo - {analista_selecionado}")
-        st.dataframe(styled_df, hide_index=True, width=1080)
-    else:
-        st.write("Não há dados suficientes para exibir a tabela de protocolos por fila.")
-
 def calcular_tmo_por_mes(df):
     # Converter coluna de tempo de análise para timedelta, se necessário
-    if df['TEMPO MÉDIO OPERACIONAL'].dtype != 'timedelta64[ns]':
-        df['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
+    if df['Tempo de Análise'].dtype != 'timedelta64[ns]':
+        df['Tempo de Análise'] = pd.to_timedelta(df['Tempo de Análise'], errors='coerce')
     
     # Adicionar coluna com ano e mês extraído da coluna 'Próximo'
-    df['AnoMes'] = df['DATA DE CONCLUSÃO DA TAREFA'].dt.to_period('M')
+    df['AnoMes'] = df['Próximo'].dt.to_period('M')
     
     # Filtrar apenas os protocolos com status 'FINALIZADO'
-    df_finalizados = df[df['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])]
+    df_finalizados = df[df['Status'] == 'FINALIZADO']
     
     # Agrupar por AnoMes e calcular o TMO
     df_tmo_mes = df_finalizados.groupby('AnoMes').agg(
-        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),
-        Total_Protocolos=('TEMPO MÉDIO OPERACIONAL', 'count')
+        Tempo_Total=('Tempo de Análise', 'sum'),
+        Total_Protocolos=('Tempo de Análise', 'count')
     ).reset_index()
     
     # Calcular o TMO em minutos
