@@ -33,5 +33,8 @@ else:
         # Carrega o dashboard da pasta BV
         dashboard_bv = importlib.import_module("Maestro.dashboard")
         dashboard_bv.dashboard()  # Chama a função 'dashboard' dentro do arquivo dashboard.py da pasta BV
+    elif dominio == "oficios":
+        dashboard_oficios = importlib.import_module("Oficios.dashboard")    
+        dashboard_oficios.dashboard()
     else:
         st.error("Usuário não autorizado para visualizar o dashboard.")

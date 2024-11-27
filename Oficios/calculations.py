@@ -9,7 +9,7 @@ def load_data(usuario):
     if os.path.exists(parquet_file):
         df_total = pd.read_parquet(parquet_file)
     else:
-        df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Status', 'Tempo de Análise', 'Próximo'])
+        df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Tempo', 'Início'])
     return df_total
 
 # Função para salvar os dados no Excel do usuário logado
