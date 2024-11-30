@@ -11,9 +11,7 @@ def dashboard():
     # Carregar dados
     usuario_logado = st.session_state.usuario_logado
     df_total = load_data(usuario_logado)
-
-    st.logo("finch.png")
-
+    
     # Sidebar
     st.sidebar.header("Navegação")
     opcao_selecionada = st.sidebar.selectbox("Escolha uma visão", ["Visão Geral", "Métricas Individuais", "Diário de Bordo"])
@@ -30,6 +28,73 @@ def dashboard():
     # Converte para cálculos temporários
     df_total = convert_to_timedelta_for_calculations(df_total)
     df_total = convert_to_datetime_for_calculations(df_total)
+    
+    ms = st.session_state
+
+    # Verifique se a chave 'themes' existe no session_state
+    if "themes" not in ms:
+        ms.themes = {
+            "current_theme": "light",  # Tema padrão
+            "refreshed": True,
+            
+            # Definições para o tema claro
+            "light": {
+                "theme.base": "light",  # Tema base claro
+                "theme.primaryColor": "#ff521a",  # Cor primária
+                "theme.backgroundColor": "#FFFFFF",
+                "theme.secondaryBackgroundColor": "#F0F2F6",  # Cor de fundo
+                "theme.textColor": "#31333F",  # Cor do texto
+                "button_face": "🌜",  # Ícone para o botão
+                "logo": "logo_light.png",  # Logo para o tema claro
+            },
+            
+            # Definições para o tema escuro
+            "dark": {
+                "theme.base": "dark",  # Tema base escuro
+                "theme.primaryColor": "#ff521a",  # Cor primária
+                "theme.backgroundColor": "black",
+                "theme.secondaryBackgroundColor": "#262730",  # Cor de fundo
+                "theme.textColor": "white",  # Cor do texto
+                "button_face": "🌞",  # Ícone para alternar para o tema claro
+                "logo": "logo_dark.png",  # Logo para o tema escuro
+            }
+        }
+
+    # Função para alterar o tema
+    def ChangeTheme():
+        # Obter o tema anterior
+        previous_theme = ms.themes["current_theme"]
+            
+        # Obter o dicionário de configurações do tema baseado no tema atual
+        theme_dict = ms.themes["light"] if ms.themes["current_theme"] == "light" else ms.themes["dark"]
+            
+        # Definir as opções do tema com base nas configurações
+        for key, value in theme_dict.items():
+            if key.startswith("theme"):
+                st._config.set_option(key, value)
+        
+        # Alterar o tema atual
+        if previous_theme == "dark":
+            ms.themes["current_theme"] = "light"
+        else:
+            ms.themes["current_theme"] = "dark"
+            
+        ms.themes["refreshed"] = False
+
+    # Definindo o botão para troca de tema
+    btn_face = ms.themes["light"]["button_face"] if ms.themes["current_theme"] == "light" else ms.themes["dark"]["button_face"]
+    st.sidebar.button(btn_face, on_click=ChangeTheme)
+
+    # Lógica para exibir o logo baseado no tema
+    if ms.themes["current_theme"] == "light":
+        st.logo("https://finchsolucoes.com.br/img/eb28739f-bef7-4366-9a17-6d629cf5e0d9.png")  # Logo para o tema claro
+    else:
+        st.logo("finch.png")  # Logo para o tema escuro
+
+    # Rerun após a alteração do tema
+    if ms.themes["refreshed"] == False:
+        ms.themes["refreshed"] = True
+        st.rerun()
 
     custom_colors = ['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']
 
