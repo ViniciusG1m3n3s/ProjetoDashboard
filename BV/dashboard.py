@@ -4,6 +4,7 @@ from io import BytesIO
 from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_e_exibir_protocolos_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia
 from datetime import datetime
+from io import BytesIO
 import streamlit as st
 
 def dashboard():
@@ -155,6 +156,21 @@ def dashboard():
         
         with st.expander("Exportar Dados"):
             export_dataframe(df_total)
+            if not df_total.empty:
+                buffer = BytesIO()
+                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                    df_total.to_excel(writer, index=False, sheet_name='Dados_Acumulados')
+                buffer.seek(0)
+                
+                st.download_button(
+                    label="Download dados acumulados",
+                    data=buffer,
+                    file_name=f"dados_acumulados_{usuario_logado}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("Nenhum dado disponível para download.")
+            
             
     elif opcao_selecionada == "Métricas Individuais":
         st.header("Métricas Individuais")
