@@ -3,19 +3,39 @@ import os
 import plotly.express as px
 import math
 import streamlit as st
+import pandas as pd
+import os
 
+# Função para carregar os dados do arquivo Parquet ou criar um novo se não existir
 def load_data(usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
+    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho completo do arquivo
     if os.path.exists(parquet_file):
         df_total = pd.read_parquet(parquet_file)
     else:
+        # Caso o arquivo não exista, cria um dataframe vazio com as colunas definidas
         df_total = pd.DataFrame(columns=['Protocolo', 'Usuário', 'Status', 'Tempo de Análise', 'Próximo'])
     return df_total
 
-# Função para salvar os dados no Excel do usuário logado
+# Função para salvar os dados automaticamente no arquivo Parquet
 def save_data(df, usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet' # Caminho completo do arquivo
-    df.to_parquet(parquet_file, index=False)
+    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho completo do arquivo
+    
+    # Carregar os dados acumulados anteriores
+    df_total = load_data(usuario)
+    
+    # Remover duplicatas dentro do dataframe do usuário (linha inteira, não apenas algumas colunas)
+    df_cleaned = df.drop_duplicates(keep='first')
+    
+    # Concatenar os dados acumulados com os dados limpos do usuário
+    df_total = pd.concat([df_total, df_cleaned], ignore_index=True)
+    
+    # Remover duplicatas do dataframe acumulado (linha inteira, não apenas algumas colunas)
+    df_total = df_total.drop_duplicates(keep='first')
+    
+    # Salvar os dados no arquivo Parquet sem precisar de interação do usuário
+    df_total.to_parquet(parquet_file, index=False)
+
+    print(f"Dados do usuário {usuario} salvos com sucesso no arquivo {parquet_file}")
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = df['Próximo'].dt.date
