@@ -6,7 +6,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-# Função para carregar os dados do arquivo Parquet ou criar um novo se não existir
+# Função para carregar dados do arquivo Parquet
 def load_data(usuario):
     parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho completo do arquivo
     if os.path.exists(parquet_file):
@@ -31,11 +31,13 @@ def save_data(df, usuario):
     
     # Remover duplicatas do dataframe acumulado (linha inteira, não apenas algumas colunas)
     df_total = df_total.drop_duplicates(keep='first')
-    
+
+    # Remover linhas com os nomes específicos
+    nomes_a_excluir = ["BERNARDO DE FREITAS COSTA LIN", "CAROLINA DE PAULA DA SILVA PER"]
+    df_total = df_total[~df_total['Usuário'].isin(nomes_a_excluir)]
+
     # Salvar os dados no arquivo Parquet sem precisar de interação do usuário
     df_total.to_parquet(parquet_file, index=False)
-
-    print(f"Dados do usuário {usuario} salvos com sucesso no arquivo {parquet_file}")
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = df['Próximo'].dt.date
@@ -271,6 +273,20 @@ def calcular_tmo_por_carteira(df):
 
     # Seleciona apenas as colunas de interesse
     tmo_por_carteira = tmo_por_carteira[['Carteira', 'TMO']]
+
+    # Identifica a carteira com o maior TMO
+    carteira_max_tmo = tmo_por_carteira.loc[
+        tmo_por_carteira['TMO'] == tmo_por_carteira['TMO'].max()
+    ]
+
+    # Exibe a métrica no Streamlit
+    if not carteira_max_tmo.empty:
+        with st.container(border=True):
+            st.metric(
+                label="Carteira com maior TMO",
+                value=carteira_max_tmo.iloc[0]['Carteira'],
+                delta=f"TMO: {carteira_max_tmo.iloc[0]['TMO']}"
+            )
 
     return tmo_por_carteira
 
