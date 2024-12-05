@@ -297,7 +297,8 @@ def calcular_tmo_por_carteira(df):
             st.metric(
                 label="Menor TMO",
                 value=carteira_min_tmo.iloc[0]['Carteira'],
-                delta=f"TMO: {carteira_min_tmo.iloc[0]['TMO']}", delta_color='normal'
+                delta=f"TMO: {carteira_min_tmo.iloc[0]['TMO']}",
+                delta_color='normal'
             )
 
     # Retorna o DataFrame com o TMO formatado
