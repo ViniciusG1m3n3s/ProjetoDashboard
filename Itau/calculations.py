@@ -289,13 +289,13 @@ def calcular_tmo_por_carteira(df):
         col1, col2 = st.columns(2)
         with col1.container(border=True):
             st.metric(
-                label="Carteira com maior TMO",
+                label="Maior TMO",
                 value=carteira_max_tmo.iloc[0]['Carteira'],
-                delta=f"TMO: {carteira_max_tmo.iloc[0]['TMO']}"
+                delta=f"TMO: {carteira_max_tmo.iloc[0]['TMO']}", delta_color='inverse'
             )
         with col2.container(border=True):
             st.metric(
-                label="Carteira com menor TMO",
+                label="Menor TMO",
                 value=carteira_min_tmo.iloc[0]['Carteira'],
                 delta=f"TMO: {carteira_min_tmo.iloc[0]['TMO']}"
             )
