@@ -279,13 +279,25 @@ def calcular_tmo_por_carteira(df):
         tmo_por_carteira['Tempo_total_segundos'] == tmo_por_carteira['Tempo_total_segundos'].max()
     ]
 
+    # Identifica a carteira com o menor TMO (com base no tempo total em segundos)
+    carteira_min_tmo = tmo_por_carteira.loc[
+        tmo_por_carteira['Tempo_total_segundos'] == tmo_por_carteira['Tempo_total_segundos'].min()
+    ]
+
     # Exibe a métrica no Streamlit
-    if not carteira_max_tmo.empty:
-        with st.container(border=True):
+    with st.container():
+        col1, col2 = st.columns(2)
+        with col1.container(border=True):
             st.metric(
                 label="Carteira com maior TMO",
                 value=carteira_max_tmo.iloc[0]['Carteira'],
                 delta=f"TMO: {carteira_max_tmo.iloc[0]['TMO']}"
+            )
+        with col2.container(border=True):
+            st.metric(
+                label="Carteira com menor TMO",
+                value=carteira_min_tmo.iloc[0]['Carteira'],
+                delta=f"TMO: {carteira_min_tmo.iloc[0]['TMO']}"
             )
 
     # Retorna o DataFrame com o TMO formatado
