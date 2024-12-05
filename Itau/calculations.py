@@ -271,12 +271,12 @@ def calcular_tmo_por_carteira(df):
         lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
     )
 
-    # Seleciona apenas as colunas de interesse
-    tmo_por_carteira = tmo_por_carteira[['Carteira', 'TMO']]
+    # Adiciona uma coluna para o tempo total em segundos (necessário para comparação)
+    tmo_por_carteira['Tempo_total_segundos'] = tmo_por_carteira['Tempo de Análise'].apply(lambda x: x.total_seconds())
 
-    # Identifica a carteira com o maior TMO
+    # Identifica a carteira com o maior TMO (com base no tempo total em segundos)
     carteira_max_tmo = tmo_por_carteira.loc[
-        tmo_por_carteira['TMO'] == tmo_por_carteira['TMO'].max()
+        tmo_por_carteira['Tempo_total_segundos'] == tmo_por_carteira['Tempo_total_segundos'].max()
     ]
 
     # Exibe a métrica no Streamlit
@@ -288,7 +288,8 @@ def calcular_tmo_por_carteira(df):
                 delta=f"TMO: {carteira_max_tmo.iloc[0]['TMO']}"
             )
 
-    return tmo_por_carteira
+    # Retorna o DataFrame com o TMO formatado
+    return tmo_por_carteira[['Carteira', 'TMO']]
 
 def calcular_tmo_por_mes(df):
     # Converter coluna de tempo de análise para timedelta, se necessário
