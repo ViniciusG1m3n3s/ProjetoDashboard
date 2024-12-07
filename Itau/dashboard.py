@@ -44,7 +44,7 @@ def dashboard():
                 "theme.backgroundColor": "#FFFFFF",
                 "theme.secondaryBackgroundColor": "#F0F2F6",  # Cor de fundo
                 "theme.textColor": "#31333F",  # Cor do texto
-                "button_face": "🌜",  # Ícone para o botão
+                "button_face": ":material/light_mode:",  # Ícone para o botão
                 "logo": "logo_light.png",  # Logo para o tema claro
             },
             
@@ -55,7 +55,7 @@ def dashboard():
                 "theme.backgroundColor": "black",
                 "theme.secondaryBackgroundColor": "#262730",  # Cor de fundo
                 "theme.textColor": "white",  # Cor do texto
-                "button_face": "🌞",  # Ícone para alternar para o tema claro
+                "button_face": ":material/dark_mode:",  # Ícone para alternar para o tema claro
                 "logo": "logo_dark.png",  # Logo para o tema escuro
             }
         }
