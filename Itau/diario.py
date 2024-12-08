@@ -159,11 +159,13 @@ def exibir_grafico_pizza_com_periodo(registros, data_inicio, data_fim):
             hovertemplate.append(f'{label}: {value:.0f} minutos (%{{percent:.1f}}%)<br>')
     total_trabalhado_str = f'{int(hours):02d}:{int(minutes):02d}'
     # Criar o gráfico de pizza
+    custom_colors = ['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']
     fig = go.Figure(data=[go.Pie(
         labels=labels,
         values=values,
         hovertemplate=hovertemplate,  # Exibe valor e porcentagem no hover
         textinfo='label+percent',  # Exibe apenas porcentagem no gráfico
+        marker=dict(colors=custom_colors[:len(labels)]),
     )])
     fig.update_layout(title_text=f"Indisponibilidade ({data_inicio} a {data_fim})")
 
