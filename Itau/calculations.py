@@ -4,6 +4,7 @@ import plotly.express as px
 import math
 import streamlit as st
 import pandas as pd
+from io import BytesIO
 import os
 
 # Função para carregar dados do arquivo Parquet
@@ -384,3 +385,31 @@ def exibir_dataframe_tmo_formatado(df):
     st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
     
     return df_tmo_formatado
+
+def export_dataframe(df):
+    st.subheader("Exportar Dados")
+    
+    # Seleção de colunas
+    colunas_disponiveis = list(df.columns)
+    colunas_selecionadas = st.multiselect(
+        "Selecione as colunas que deseja exportar:", colunas_disponiveis, default=[]
+    )
+    
+    # Filtrar o DataFrame pelas colunas selecionadas
+    if colunas_selecionadas:
+        df_filtrado = df[colunas_selecionadas]
+        
+        # Botão de download
+        buffer = BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df_filtrado.to_excel(writer, index=False, sheet_name='Dados_Exportados')
+        buffer.seek(0)
+        
+        st.download_button(
+            label="Baixar Excel",
+            data=buffer,
+            file_name="dados_exportados.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("Selecione pelo menos uma coluna para exportar.")
