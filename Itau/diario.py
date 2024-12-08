@@ -26,14 +26,11 @@ def painel_indisponibilidade_diaria_adaptado(registros):
     Parâmetros:
     - registros: Lista de tuplas [(inicio, fim)], onde inicio e fim estão no formato '%Y-%m-%d %H:%M'.
     """
-    # Ordenar registros por data e horário
     registros.sort(key=lambda x: datetime.strptime(x[0], '%Y-%m-%d %H:%M'))
 
-    # Base do eixo X (08:00 às 18:00)
     inicio_dia = time(8, 0)
     fim_dia = time(18, 0)
 
-    # Agrupar registros por dia
     registros_por_dia = {}
     for inicio, fim in registros:
         inicio_dt = datetime.strptime(inicio, '%Y-%m-%d %H:%M')
@@ -43,70 +40,60 @@ def painel_indisponibilidade_diaria_adaptado(registros):
             registros_por_dia[dia] = []
         registros_por_dia[dia].append((inicio_dt, fim_dt))
 
-    # Criar a base do gráfico
     fig = go.Figure()
 
-    # Adicionar registros de indisponibilidade por dia
     for dia, periodos in registros_por_dia.items():
         for inicio_dt, fim_dt in periodos:
-            # Ajustar horários ao intervalo permitido (08:00 às 18:00)
             if inicio_dt.time() < inicio_dia:
                 inicio_dt = inicio_dt.replace(hour=8, minute=0)
             if fim_dt.time() > fim_dia:
                 fim_dt = fim_dt.replace(hour=18, minute=0)
 
-            # Calcular os horários como valores no eixo X
             inicio_horas = (inicio_dt - inicio_dt.replace(hour=8, minute=0)).seconds / 3600
             fim_horas = (fim_dt - inicio_dt.replace(hour=8, minute=0)).seconds / 3600
 
-            # Calcular o período de indisponibilidade em minutos
             duracao_minutos = int((fim_dt - inicio_dt).total_seconds() // 60)
 
-            # Formatar o texto a ser exibido fora da barra
             periodo_texto = f"{inicio_dt.strftime('%H:%M')} - {fim_dt.strftime('%H:%M')}<br>({duracao_minutos} minutos)"
-            # Adicionar traço horizontal para o período de indisponibilidade
             fig.add_trace(go.Scatter(
-                x=[inicio_horas, fim_horas],  # Início e fim no eixo X
-                y=[str(dia), str(dia)],  # Mesmo dia no eixo Y
+                x=[inicio_horas, fim_horas],
+                y=[str(dia), str(dia)],
                 mode='lines',
-                line=dict(color='red', width=22),  # Barra horizontal maior
+                line=dict(color='red', width=22),
                 hovertemplate=f"{inicio_dt.strftime('%H:%M')} - {fim_dt.strftime('%H:%M')}<extra></extra>",
                 showlegend=False
             ))
 
-            # Adicionar o texto fora da barra
             fig.add_trace(go.Scatter(
-                x=[(inicio_horas + fim_horas) / 2],  # Ponto central da barra no eixo X
-                y=[str(dia)],  # Mesmo dia no eixo Y
+                x=[(inicio_horas + fim_horas) / 2],
+                y=[str(dia)],
                 mode='text',
-                text=[f"{periodo_texto}<br><br>&nbsp;<br><br>"],  # Texto com o período e duração
-                textfont=dict(size=12, color="gray"),  # Texto em cinza para contraste
+                text=[f"{periodo_texto}<br><br>&nbsp;<br><br>"],
+                textfont=dict(size=12, color="gray"),
                 showlegend=False
             ))
 
-    # Configurações do layout
     fig.update_layout(
         title="Painel de Indisponibilidade Diária",
         xaxis=dict(
             title="Hora do Dia",
-            range=[0, 10],  # De 08:00 (0 horas) a 18:00 (10 horas)
-            tickvals=list(range(11)),  # Marcar ticks em cada hora
-            ticktext=[f"{h+8}:00" for h in range(11)],  # De 08:00 a 18:00
+            range=[0, 10],
+            tickvals=list(range(11)),
+            ticktext=[f"{h+8}:00" for h in range(11)],
             showgrid=True,
         ),
         yaxis=dict(
             title="Dias",
             showgrid=True,
-            type="category",  # Para exibir os dias como categorias
+            type="category",
             tickmode="linear",
             tickvals=[str(dia) for dia in registros_por_dia.keys()],
             ticktext=[str(dia) for dia in registros_por_dia.keys()],
         ),
         template="plotly_white",
-        height=400  # Altura ajustada para comportar os textos
+        height=450 
     )
 
-    # Exibir o gráfico
     st.plotly_chart(fig)
     
 # Função para calcular e exibir o gráfico de pizza com filtro de período
@@ -149,32 +136,114 @@ def exibir_grafico_pizza_com_periodo(registros, data_inicio, data_fim):
     # Dados para o gráfico de pizza
     labels = ['Indisponibilidade', 'Trabalhado']
     values = [total_indisponibilidade, total_trabalhado]
-    hovertemplate = []
+    
+    # Converter valores para horas e minutos e criar rótulos detalhados
+    formatted_values = []
     for label, value in zip(labels, values):
-        hours, remainder = divmod(value, 60)
-        minutes, _ = divmod(remainder, 1)
-        if value > 260:
-            hovertemplate.append(f'{label}: {int(hours):02d}:{int(minutes):02d} (%{{percent:.1f}}%)<br>')
-        else:
-            hovertemplate.append(f'{label}: {value:.0f} minutos (%{{percent:.1f}}%)<br>')
-    total_trabalhado_str = f'{int(hours):02d}:{int(minutes):02d}'
+        hours, minutes = divmod(value, 60)
+        formatted_values.append(f"{label}: {int(hours)}h {int(minutes)}m")
+
     # Criar o gráfico de pizza
-    custom_colors = ['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']
+    custom_colors = ['#ff571c', '#7f2b0e']
     fig = go.Figure(data=[go.Pie(
         labels=labels,
         values=values,
-        hovertemplate=hovertemplate,  # Exibe valor e porcentagem no hover
-        textinfo='label+percent',  # Exibe apenas porcentagem no gráfico
+        hoverinfo="label+percent",  # Exibe o rótulo e porcentagem no hover
+        text=formatted_values,  # Exibe os rótulos detalhados no gráfico
+        textinfo='text',  # Exibe apenas o texto customizado
         marker=dict(colors=custom_colors[:len(labels)]),
     )])
-    fig.update_layout(title_text=f"Indisponibilidade ({data_inicio} a {data_fim})")
+    fig.update_layout(
+        title_text=f"Indisponibilidade ({data_inicio} a {data_fim})",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5,
+        ),
+    )
 
     st.plotly_chart(fig)
     
+def load_diario(usuario):
+    file_path = f'diario_bordo_{usuario}.txt'
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as file:
+            anotacoes = file.readlines()
+    else:
+        anotacoes = []
+    return [anotacao.strip() for anotacao in anotacoes]
+
+def save_anotacao(usuario, anotacao):
+    file_path = f'diario_bordo_{usuario}.txt'
+    with open(file_path, 'a', encoding='utf-8') as file:
+        file.write(f"{datetime.now().strftime('%d/%m/%Y %H:%M')} - {anotacao}\n")
+
+def update_anotacoes(usuario, anotacoes):
+    file_path = f'diario_bordo_{usuario}.txt'
+    with open(file_path, 'w', encoding='utf-8') as file:
+        for anotacao in anotacoes:
+            file.write(f"{anotacao}\n")
+
 # Main app
 def diario():
+    usuario_logado = st.session_state.usuario_logado  # Obtém o usuário logado
+    # Carregar anotações anteriores
+    anotacoes = load_diario(usuario_logado)
+
+    # Área para adicionar uma nova anotação
+    with st.container():
+        st.subheader("Nova Anotação")
+        nova_anotacao = st.text_area("Escreva sua anotação aqui...")
+
+        if st.button(":material/check_circle: Salvar"):
+            if nova_anotacao.strip():
+                save_anotacao(usuario_logado, nova_anotacao)
+                st.success("Anotação salva com sucesso!")
+                st.rerun()  # Recarrega a p gina para exibir a nova anota o
+            else:
+                st.error("A anotação não pode estar vazia!")
+
+    # Exibir e permitir edição das anotações anteriores
+    with st.expander("📚 Anotações Anteriores", expanded=True):
+        if anotacoes:
+            edit_index = st.session_state.get('edit_index', -1)
+            for idx, anotacao in enumerate(anotacoes):
+                # Layout com `st.info` e botões lado a lado
+                with st.container():
+                        st.info(anotacao)
+                col1, col2 = st.columns([0.1, 0.9])  # col1 tem 10% e col2 tem 90% do espaço
+                with col1:
+                    if st.button(":material/edit_document: Editar", key=f"edit_button_{idx}"):                         
+                        st.session_state.edit_index = idx
+                        st.rerun()
+                with col2:
+                    if st.button(":material/delete: Excluir", key=f"delete_button_{idx}"):  # Botão Excluir
+                        anotacoes.pop(idx)
+                        update_anotacoes(usuario_logado, anotacoes)
+                        st.success("Anotação excluída com sucesso!")
+                        st.rerun()
+                # Modo de edição
+                if idx == edit_index:
+                    st.text_area("Editar Anotação", value=anotacao, key=f"edit_{idx}", on_change=None)
+                    col1, col2 = st.columns([0.1, 0.9])  # col1 tem 10% e col2 tem 90% do espaço
+                    with col1:
+                        if st.button(":material/check_circle: Salvar", key=f"save_{idx}"):
+                            anotacoes[idx] = st.session_state.get(f"edit_{idx}", anotacao)
+                            update_anotacoes(usuario_logado, anotacoes)
+                            st.success("Anotação editada com sucesso!")
+                            st.session_state.edit_index = -1  # Sair do modo de edição
+                            st.rerun()
+                    with col2:
+                        if st.button(":material/close: Cancelar", key=f"cancel_{idx}"):
+                            st.session_state.edit_index = -1  # Sair do modo de edição
+                            st.rerun()
+        else:
+            st.info("Nenhuma anotação encontrada.")
+        
     if 'usuario_logado' not in st.session_state:
-        st.session_state.usuario_logado = "usuario_teste"  # Usuário fictício para testes
+        st.session_state.usuario_logado = usuario_logado  # Usuário fictício para testes
     usuario_logado = st.session_state.usuario_logado
 
     st.header("Controle de Indisponibilidade Sistêmica")
@@ -197,8 +266,10 @@ def diario():
                 st.rerun()
         except ValueError:
             st.error("Erro ao salvar registro! Verifique os dados e tente novamente.")
-
-    with st.container(border=True):
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        with st.container(border=True):
             registros = load_indisponibilidade(usuario_logado)
             if registros:
                 st.subheader("Registros de Indisponibilidade")
@@ -225,8 +296,9 @@ def diario():
                 else:
                     st.info("Nenhum registro encontrado para as datas selecionadas.")
 
-    with st.container(border=True):
-            st.subheader("Gráfico de Pizza por Período")
+    with col2:
+        with st.container(border=True):
+            st.subheader("Porcentagem de Indisponibilidade")
 
             col1, col2 = st.columns(2)
             with col1:
