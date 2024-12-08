@@ -215,6 +215,35 @@ def calcular_carteiras_analista(df_analista):
         # Renomeando a coluna 'Carteira' para 'Fila' para manter consistência
         carteiras_analista = carteiras_analista.rename(columns={'Carteira': 'Fila'})
 
+        # Adiciona uma coluna para o tempo total em segundos (necessário para comparação)
+        carteiras_analista['Tempo_total_segundos'] = carteiras_analista['TMO_médio'].apply(lambda x: x.total_seconds())
+
+        # Identifica a carteira com o maior TMO (com base no tempo total em segundos)
+        carteira_max_tmo = carteiras_analista.loc[
+            carteiras_analista['Tempo_total_segundos'] == carteiras_analista['Tempo_total_segundos'].max()
+        ]
+
+        # Identifica a carteira com o menor TMO (com base no tempo total em segundos)
+        carteira_min_tmo = carteiras_analista.loc[
+            carteiras_analista['Tempo_total_segundos'] == carteiras_analista['Tempo_total_segundos'].min()
+        ]
+
+        # Exibe a métrica no Streamlit
+        with st.container():
+            col1, col2 = st.columns(2)
+            with col1.container(border=True):
+                st.metric(
+                    label="Maior TMO",
+                    value=carteira_max_tmo.iloc[0]['Fila'],
+                    delta=f"TMO: {format_timedelta(carteira_max_tmo.iloc[0]['TMO_médio'])}", delta_color='inverse'
+                )
+            with col2.container(border=True):
+                st.metric(
+                    label="Menor TMO",
+                    value=carteira_min_tmo.iloc[0]['Fila'],
+                    delta=f"TMO: {format_timedelta(carteira_min_tmo.iloc[0]['TMO_médio'])}", delta_color='normal'
+                )
+
         return carteiras_analista
     else:
         return pd.DataFrame({'Fila': [], 'Quantidade': [], 'TMO Médio por Fila': []})
