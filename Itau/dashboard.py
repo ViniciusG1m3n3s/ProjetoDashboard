@@ -3,6 +3,7 @@ import pandas as pd
 from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_tmo, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista,grafico_filas_analista, grafico_tmo_analista
 from datetime import datetime
+from Itau.diario import diario
 import streamlit as st
 
 def dashboard():
@@ -316,6 +317,9 @@ def dashboard():
             else:
                 # Exibe o DataFrame no Streamlit se não houver erro
                 st.dataframe(df_points_of_attention, use_container_width=True, hide_index=True)
+        
+    elif opcao_selecionada == "Diário de Bordo":
+        diario()
 
     if st.sidebar.button("Logout", icon=":material/logout:"):
         st.session_state.logado = False
