@@ -22,10 +22,13 @@ def dashboard():
     uploaded_file = st.sidebar.file_uploader("Carregar nova planilha", type=["xlsx"])
 
     if uploaded_file is not None:
-        df_new = pd.read_excel(uploaded_file)
-        df_total = pd.concat([df_total, df_new], ignore_index=True)
-        save_data(df_total, usuario_logado)
-        st.sidebar.success(f'Arquivo "{uploaded_file.name}" carregado com sucesso!')
+        try:
+            df_new = pd.read_excel(uploaded_file)
+            df_total = pd.concat([df_total, df_new], ignore_index=True)
+            save_data(df_total, usuario_logado)
+            st.sidebar.success(f'Arquivo "{uploaded_file.name}" carregado com sucesso!')
+        except Exception as e:
+            st.sidebar.error(f"Houve um erro ao carregar o arquivo: {e}")
 
     # Converte para cálculos temporários
     df_total = convert_to_timedelta_for_calculations(df_total)
