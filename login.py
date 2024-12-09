@@ -27,7 +27,7 @@ def login():
     background_image_css = """
     <style>
     [data-testid="stAppViewContainer"] {
-        background-image: url("bg.jpg");
+        background-image: url("https://i.imgur.com/nIykKCF.jpeg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
