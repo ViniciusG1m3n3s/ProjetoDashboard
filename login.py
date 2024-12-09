@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 # Dicionário com usuários e senhas
 usuarios = {"usuario@itau": "senha1", "usuario2@bv": "senha2", "sidnei@itau": "f1nch", "carol@itau": "f1nch", "leonardo@itau": "123", "viviane@bv": "f1nch", "raissa@maestro": "f1nch", "sidnei@oficios": "f1nch", "viviane_bv@bv": "finch"}
 
@@ -22,5 +23,36 @@ def login():
             return True  # Retorna True se o login for bem-sucedido
         else:
             st.sidebar.error("Usuário ou senha incorretos.")
+
+    background_image_css = """
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background-image: url("planodefundo.png");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-color: rgba(0, 0, 0, 0.3); /* Adiciona uma camada de transparência escura */
+    }
+    header {
+    background-color: rgba(255, 255, 255, 0); /* Torna o fundo do cabeçalho transparente */
+    color: transparent; /* Remove o texto do cabeçalho (opcional) */
+    box-shadow: none; /* Remove a sombra (opcional) */
+    }
+    [data-testid="stHeader"] {
+        background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
+    }
+    #     /* Aplica transparência com blur à sidebar */
+    # [data-testid="stSidebar"] {
+    #     background-color: rgba(128, 128, 128, 0.5); /* Cinza translucido */
+    #     backdrop-filter: blur(1px); /* Efeito de desfoque */
+    #     -webkit-backdrop-filter: blur(10px); /* Compatibilidade com navegadores Webkit */
+    # }
+    # </style>
+    """
+    st.markdown(background_image_css, unsafe_allow_html=True)
+    
     
     return False  # Retorna False se o login falhar
+
+
