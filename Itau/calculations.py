@@ -158,8 +158,8 @@ def calcular_metrica_analista(df_analista):
     total_andamento = len(df_analista[df_analista['Status'] == 'ANDAMENTO_PRE'])
 
     # Calcula o tempo total de análise considerando "FINALIZADO" e "RECLASSIFICADO" apenas
-    tempo_total_analista = df_filtrados[df_filtrados['Status'] == 'FINALIZADO']['Tempo de Análise'].sum()
-    tempo_medio_analista = tempo_total_analista / total_finalizados  if total_finalizados > 0 else 0
+    tempo_total_analista = df_filtrados[df_filtrados['Status'].isin(['FINALIZADO', 'RECLASSIFICADO'])]['Tempo de Análise'].sum()
+    tempo_medio_analista = tempo_total_analista / (total_finalizados + total_reclass)  if total_finalizados + total_reclass > 0 else 0
 
     return total_finalizados, total_reclass, total_andamento, tempo_medio_analista
 
@@ -247,7 +247,7 @@ def calcular_carteiras_analista(df_analista):
         return carteiras_analista
     else:
         return pd.DataFrame({'Fila': [], 'Quantidade': [], 'TMO Médio por Fila': []})
-    
+        
 def get_points_of_attention(df):
     # Verifica se a coluna 'Carteira' existe no DataFrame
     if 'Carteira' not in df.columns:
