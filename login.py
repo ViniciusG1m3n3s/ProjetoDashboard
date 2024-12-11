@@ -12,10 +12,10 @@ def autenticar(usuario, senha):
 def login():
     st.logo("finch.png")
     st.sidebar.header("Login")
-    usuario = st.sidebar.text_input("Usuário")
-    senha = st.sidebar.text_input("Senha", type="password")
+    usuario = st.sidebar.text_input("Usuário", placeholder="👤 Usuário", label_visibility="collapsed")
+    senha = st.sidebar.text_input("Senha", type="password", placeholder="🔑 *********", label_visibility="collapsed")
 
-    if st.sidebar.button("Entrar"):
+    if st.sidebar.button("Entrar", icon=":material/login:", use_container_width=True, type="primary"):
         if autenticar(usuario, senha):
             st.session_state.logado = True
             st.session_state.usuario_logado = usuario  # Armazena o usuário logado
@@ -27,7 +27,7 @@ def login():
     background_image_css = """
     <style>
     [data-testid="stAppViewContainer"] {
-        background-image: url("https://i.imgur.com/JmJ4l8c.png");
+        background-image: url("https://i.imgur.com/wdWNqgq.png");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
