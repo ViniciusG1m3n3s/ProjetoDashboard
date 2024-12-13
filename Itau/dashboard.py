@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_tmo, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe
+from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_tmo, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_assertividade, exibir_grafico_assertividade
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista,grafico_filas_analista, grafico_tmo_analista
 from datetime import datetime
 from Itau.diario import diario
 from io import BytesIO
-import streamlit as st
+import streamlit as st  
 
 def dashboard():
     st.title("Dashboard de Produtividade")
@@ -259,7 +259,8 @@ def dashboard():
         tmo_equipe = calcular_tmo_equipe(df_total)
         
         total_finalizados_analista, total_reclass_analista, total_andamento_analista, tempo_medio_analista = calcular_metrica_analista(df_analista)
-
+        
+        
         # Define valores padrão caso as variáveis retornem como None
         if total_finalizados_analista is None:
             total_finalizados_analista = 0
@@ -321,6 +322,14 @@ def dashboard():
                 st.subheader(f"Filas Realizadas por - {analista_selecionado}")
                 fig_filas = grafico_filas_analista(carteiras_analista, custom_colors)
                 st.plotly_chart(fig_filas, use_container_width=True)
+        
+            # Calcular assertividade com o DataFrame geral e analista selecionado
+        df_assertividade = calcular_assertividade(df_total, analista_selecionado)
+
+        # Exibir gráfico de assertividade
+        with st.container(border=True):
+            st.subheader(f"Assertividade nas Reclassificações - {analista_selecionado}")
+            exibir_grafico_assertividade(df_assertividade)
 
         # Gráfico de TMO por dia usando a função do `graph.py`
         with st.container(border=True):

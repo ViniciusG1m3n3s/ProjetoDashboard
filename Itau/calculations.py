@@ -442,3 +442,99 @@ def export_dataframe(df):
         )
     else:
         st.warning("Selecione pelo menos uma coluna para exportar.")
+
+def calcular_assertividade(df, analista):
+    """
+    Calcula a assertividade das reclassificações feitas por um analista, verificando se os protocolos
+    reclassificados foram finalizados, estão em andamento ou foram reclassificados novamente na carteira de destino.
+
+    Args:
+        df (pd.DataFrame): DataFrame contendo os dados gerais com as colunas relevantes.
+        analista (str): Nome do analista cujas reclassificações serão avaliadas.
+
+    Returns:
+        pd.DataFrame: DataFrame com as métricas de assertividade (positiva, negativa e não tratada).
+    """
+    if 'Protocolo' not in df.columns or 'Status' not in df.columns or 'Carteira' not in df.columns or 'Usuário' not in df.columns or 'Reclassificado' not in df.columns:
+        st.error("As colunas necessárias para calcular a assertividade não foram encontradas no DataFrame.")
+        return None
+
+    # Filtrar protocolos reclassificados pelo analista selecionado
+    df_reclassificados = df[(df['Status'] == 'RECLASSIFICADO') & (df['Usuário'] == analista)]
+
+    # Lista para armazenar resultados de assertividade
+    assertividade = []
+
+    # Iterar sobre cada protocolo reclassificado
+    for _, row in df_reclassificados.iterrows():
+        protocolo = row['Protocolo']
+        carteira_reclassificada = row['Reclassificado']
+
+        # Filtrar o DataFrame apenas com os registros na carteira correspondente
+        registros_na_carteira = df[(df['Protocolo'] == protocolo) & (df['Carteira'] == carteira_reclassificada)]
+
+        # Verificar se não há registros na carteira indicada
+        if registros_na_carteira.empty:
+            assertividade.append("Não Tratado")
+            continue
+
+        # Verificar os status na carteira indicada
+        finalizado = registros_na_carteira[registros_na_carteira['Status'] == 'FINALIZADO']
+        andamento = registros_na_carteira[registros_na_carteira['Status'] == 'ANDAMENTO_PRE']
+        reclassificado_novamente = registros_na_carteira[registros_na_carteira['Status'] == 'RECLASSIFICADO']
+
+        if not finalizado.empty or not andamento.empty:
+            assertividade.append("Positiva")
+        elif not reclassificado_novamente.empty:
+            assertividade.append("Negativa")
+
+    # Calculando porcentagens
+    total = len(assertividade)
+    positiva = assertividade.count("Positiva")
+    negativa = assertividade.count("Negativa")
+    nao_tratado = assertividade.count("Não Tratado")
+
+    data = {
+        "Tipo": ["Positiva", "Negativa", "Não Tratado"],
+        "Quantidade": [positiva, negativa, nao_tratado],
+        "Porcentagem": [
+            round((positiva / total) * 100, 2) if total > 0 else 0,
+            round((negativa / total) * 100, 2) if total > 0 else 0,
+            round((nao_tratado / total) * 100, 2) if total > 0 else 0,
+        ],
+    }
+
+    return pd.DataFrame(data)
+
+def exibir_grafico_assertividade(df_assertividade):
+    """
+    Exibe um gráfico de pizza com os resultados da assertividade.
+
+    Args:
+        df_assertividade (pd.DataFrame): DataFrame retornado pela função calcular_assertividade.
+    """
+    if df_assertividade is None or df_assertividade.empty:
+        st.warning("Nenhum dado disponível para exibir o gráfico de assertividade.")
+        return
+
+    fig = px.pie(
+        df_assertividade,
+        names="Tipo",
+        values="Quantidade",
+        color="Tipo",
+        color_discrete_map={"Positiva": "#2ecc71", "Negativa": "#e74c3c", "Não Tratado": "#95a5a6"}
+    )
+
+    fig.update_layout(
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.2,
+            xanchor="center",
+            x=0.5
+        )
+    )
+
+    fig.update_traces(textinfo="percent+label")
+    st.plotly_chart(fig, use_container_width=True)
+
