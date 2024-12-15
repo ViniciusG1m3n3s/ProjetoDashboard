@@ -11,14 +11,13 @@ def autenticar(usuario, senha):
 # Função para carregar o dashboard dependendo do domínio do usuário
 def login():
     st.logo("finch.png")
-    st.sidebar.header("Login")
     usuario = st.sidebar.text_input("Usuário", placeholder="👤 Usuário", label_visibility="collapsed")
     senha = st.sidebar.text_input("Senha", type="password", placeholder="🔑 *********", label_visibility="collapsed")
 
     if st.sidebar.button("Entrar", icon=":material/login:", use_container_width=True, type="primary"):
         if autenticar(usuario, senha):
             st.session_state.logado = True
-            st.session_state.usuario_logado = usuario  # Armazena o usuário logado
+            st.session_state.usuario_logado = usuario    # Armazena o usuário logado
             st.sidebar.success("Login bem-sucedido!")
             return True  # Retorna True se o login for bem-sucedido
         else:

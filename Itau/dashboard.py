@@ -130,16 +130,16 @@ def dashboard():
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             with st.container(border=True):
-                st.metric("Total Finalizados", total_finalizados)
+                st.metric(":material/check_circle: Total Finalizados", total_finalizados)
         with col2:
             with st.container(border=True):
-                st.metric("Total Reclassificados", total_reclass)
+                st.metric(":material/next_plan: Total Reclassificados", total_reclass)
         with col3:
             with st.container(border=True):
-                st.metric("Andamentos", total_andamento)
+                st.metric(":material/add_circle: Andamentos", total_andamento)
         with col4:
             with st.container(border=True):
-                st.metric("Tempo Médio por Cadastro", format_timedelta(tempo_medio))
+                st.metric(":material/schedule: Tempo Médio por Cadastro", format_timedelta(tempo_medio))
         
         # Expander com Total Geral --- Sendo a soma de todos os cadastros, reclassificados e andamentos
         with st.expander("Total Geral"):
