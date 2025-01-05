@@ -6,7 +6,15 @@ from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_t
 from datetime import datetime
 
 
-def dashboard():    
+def dashboard():
+    
+    hide_github_icon = """
+    #GithubIcon {
+    visibility: hidden;
+    }
+    """
+    st.markdown(hide_github_icon, unsafe_allow_html=True)
+    
     background_image_css = """
     <style>
     header {
