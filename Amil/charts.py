@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import streamlit as st
 import plotly.graph_objs as go
+import altair as alt
 
 def plot_produtividade_diaria(df_produtividade, custom_colors):
     if df_produtividade.empty or 'Dia' not in df_produtividade.columns or 'Produtividade' not in df_produtividade.columns:
@@ -220,3 +221,49 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
 
     # Exibir o gráfico na dashboard
     st.plotly_chart(fig_tmo_analista)
+
+def exibir_grafico_quantidade_por_dia(df_analista, analista_selecionado, custom_colors, st):
+    """
+    Gera e exibe um gráfico de barras com a quantidade de tarefas realizadas por dia para um analista específico.
+
+    Parâmetros:
+        - df_analista: DataFrame contendo os dados de análise.
+        - analista_selecionado: Nome do analista selecionado.
+        - custom_colors: Lista de cores personalizadas para o gráfico.
+        - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
+    """
+
+    # Agrupar os dados por dia e contar a quantidade de tarefas realizadas
+    df_quantidade_analista = df_analista.groupby(df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.date).size().reset_index(name='Quantidade')
+    df_quantidade_analista = df_quantidade_analista.rename(columns={'DATA DE CONCLUSÃO DA TAREFA': 'Dia'})
+
+    # Criar o gráfico de barras
+    fig_quantidade_analista = px.bar(
+        df_quantidade_analista, 
+        x='Dia', 
+        y='Quantidade', 
+        labels={'Quantidade': 'Quantidade de Tarefas', 'Dia': 'Data'},
+        text='Quantidade',  # Exibe a quantidade nas barras
+        color_discrete_sequence=custom_colors
+    )
+    
+    fig_quantidade_analista.update_layout(
+        xaxis=dict(
+            tickvals=df_quantidade_analista['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_quantidade_analista['Dia']],
+            title='Data'
+        ),
+        yaxis=dict(
+            title='Quantidade de Tarefas'
+        ),
+        bargap=0.2  # Espaçamento entre as barras
+    )
+
+    # Personalizar o gráfico
+    fig_quantidade_analista.update_traces(
+        hovertemplate='Data = %{x}<br>Quantidade = %{y}',  # Formato do hover
+        textfont_color='white'  # Define a cor do texto como branco
+    )
+
+    # Exibir o gráfico na dashboard
+    st.plotly_chart(fig_quantidade_analista)

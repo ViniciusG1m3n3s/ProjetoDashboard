@@ -213,12 +213,12 @@ def calcular_metrica_analista(df_analista):
     for coluna in colunas_necessarias:
         if coluna not in df_analista.columns:
             st.warning(f"A coluna '{coluna}' não está disponível nos dados. Verifique o arquivo carregado.")
-            return None, None, None, None, None
+            return None, None, None, None, None, None  # Atualizado para retornar seis valores
 
     # Excluir os registros com "FILA" como "Desconhecida"
     df_analista_filtrado = df_analista[df_analista['FILA'] != "Desconhecida"]
 
-    # Filtrar os registros com status "CADASTRADO" e "ATUALIZADO"
+    # Filtrar os registros com status "CADASTRADO", "ATUALIZADO" e "REALIZADO"
     df_filtrados = df_analista_filtrado[df_analista_filtrado['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO', 'REALIZADO'])]
 
     # Converter "TEMPO MÉDIO OPERACIONAL" para minutos
@@ -420,15 +420,18 @@ def calcular_tmo_por_carteira(df):
         return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
 
     # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
-    tmo_por_carteira = df.groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
+    tmo_por_carteira = df.groupby('FILA').agg(
+        Quantidade=('FILA', 'size'),
+        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean')
+    ).reset_index()
 
     # Converte o tempo médio de análise para minutos e segundos
-    tmo_por_carteira['TMO'] = tmo_por_carteira['TEMPO MÉDIO OPERACIONAL'].apply(
+    tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
         lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
     )
 
     # Seleciona apenas as colunas de interesse
-    tmo_por_carteira = tmo_por_carteira[['FILA', 'TMO']]
+    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'TMO']]
 
     return tmo_por_carteira
 
@@ -468,13 +471,13 @@ def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_tim
         styled_df = styled_df.set_table_styles([dict(selector='th', props=[('text-align', 'left')])])
 
         # Exibe a tabela com as colunas Fila, Quantidade e TMO Médio
-        st.dataframe(styled_df, hide_index=True, width=1080)
+        st.dataframe(styled_df, hide_index=True, use_container_width=True)
     else:
         st.write("A coluna 'FILA' não foi encontrada no dataframe.")
         carteiras_analista = pd.DataFrame({'Fila': [], 'Quantidade': [], 'TMO Médio por Fila': []})
         styled_df = carteiras_analista.style.format({'Quantidade': '{:.0f}', 'TMO Médio por Fila': '{:s}'}).set_properties(**{'text-align': 'left'})
         styled_df = styled_df.set_table_styles([dict(selector='th', props=[('text-align', 'left')])])
-        st.dataframe(styled_df, hide_index=True, width=1080)
+        st.dataframe(styled_df, hide_index=True, use_container_width=True)
 
 def calcular_tmo_por_mes(df):
     # Converter coluna de tempo de análise para timedelta, se necessário
@@ -591,3 +594,84 @@ def export_dataframe(df):
         )
     else:
         st.warning("Selecione pelo menos uma coluna para exportar.")
+        
+def calcular_melhor_tmo_por_dia(df_analista):
+    # Calcula o TMO por dia
+    df_tmo_por_dia = calcular_tmo_por_dia(df_analista)
+    
+    # Identifica o dia com o menor TMO
+    if not df_tmo_por_dia.empty:
+        melhor_dia = df_tmo_por_dia.loc[df_tmo_por_dia['TMO'].idxmin()]
+        return melhor_dia['Dia'], melhor_dia['TMO']
+    return None, None
+
+def calcular_melhor_dia_por_cadastro(df_analista):
+    # Agrupa os dados por dia e conta os cadastros
+    if 'FINALIZAÇÃO' in df_analista.columns and 'DATA DE CONCLUSÃO DA TAREFA' in df_analista.columns:
+        df_cadastros_por_dia = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO'].groupby(
+            df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.date
+        ).size().reset_index(name='Quantidade')
+        
+        # Identifica o dia com maior quantidade de cadastros
+        if not df_cadastros_por_dia.empty:
+            melhor_dia = df_cadastros_por_dia.loc[df_cadastros_por_dia['Quantidade'].idxmax()]
+            return melhor_dia['DATA DE CONCLUSÃO DA TAREFA'], melhor_dia['Quantidade']
+    
+    return None, 0
+
+def exibir_tmo_por_mes_analista(df_analista, analista_selecionado):
+    """
+    Exibe o gráfico e a tabela do TMO mensal para um analista específico com filtro por mês.
+
+    Parâmetros:
+        - df_analista: DataFrame filtrado para o analista.
+        - analista_selecionado: Nome do analista selecionado.
+    """
+    # Calcular o TMO por mês
+    df_tmo_mes = calcular_tmo_por_mes(df_analista)
+
+    # Verificar se há dados para exibir
+    if df_tmo_mes.empty:
+        st.warning(f"Não há dados para calcular o TMO mensal do analista {analista_selecionado}.")
+        return None
+
+    # Formatar o TMO para exibição
+    df_tmo_mes['TMO_Formatado'] = df_tmo_mes['TMO'].apply(format_timedelta_mes)
+
+    # Criar multiselect para os meses disponíveis
+    meses_disponiveis = df_tmo_mes['AnoMes'].unique()
+    meses_selecionados = st.multiselect(
+        "Selecione os meses para exibição",
+        options=meses_disponiveis,
+        default=meses_disponiveis
+    )
+
+    # Filtrar os dados com base nos meses selecionados
+    df_tmo_mes_filtrado = df_tmo_mes[df_tmo_mes['AnoMes'].isin(meses_selecionados)]
+
+    # Verificar se há dados após o filtro
+    if df_tmo_mes_filtrado.empty:
+        st.warning("Nenhum dado disponível para os meses selecionados.")
+        return None
+
+    st.subheader(f"TMO Mensal - {analista_selecionado}")
+
+    # Criar e exibir o gráfico de barras
+    fig = px.bar(
+        df_tmo_mes_filtrado,
+        x='AnoMes',
+        y='TMO',
+        labels={'AnoMes': 'Mês', 'TMO': 'TMO (minutos)'},
+        text=df_tmo_mes_filtrado['TMO_Formatado'],  # Usar o TMO formatado como rótulo
+        color_discrete_sequence=['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']
+    )
+    fig.update_xaxes(type='category')  # Tratar o eixo X como categórico
+    fig.update_traces(textposition='outside')
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Criar e exibir a tabela com os dados formatados
+    df_tmo_mes_filtrado['Mês'] = df_tmo_mes_filtrado['AnoMes']  # Renomear para exibição
+    df_tmo_formatado = df_tmo_mes_filtrado[['Mês', 'TMO_Formatado']].rename(columns={'TMO_Formatado': 'Tempo Médio Operacional'})
+    st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
+
+    return df_tmo_formatado

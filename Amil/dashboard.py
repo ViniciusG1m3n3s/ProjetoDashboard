@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista
-from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia
+from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista
+from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
 from datetime import datetime
-from io import BytesIO
-import streamlit as st
+import pdfkit
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 def dashboard():    
-    st.info("Dashboard Amil")
-    
+        
     # Carregar dados
     usuario_logado = st.session_state.usuario_logado
     df_total = load_data(usuario_logado)
@@ -42,22 +42,22 @@ def dashboard():
             # Definições para o tema claro
             "light": {
                 "theme.base": "light",  # Tema base claro
-                "theme.primaryColor": "#ff521a",  # Cor primária
+                "theme.primaryColor": "#291ad9",  # Cor primária
                 "theme.backgroundColor": "#FFFFFF",
                 "theme.secondaryBackgroundColor": "#F0F2F6",  # Cor de fundo
                 "theme.textColor": "#31333F",  # Cor do texto
-                "button_face": "🌜",  # Ícone para o botão
+                "button_face": ":material/light_mode:",  # Ícone para o botão
                 "logo": "logo_light.png",  # Logo para o tema claro
             },
             
             # Definições para o tema escuro
             "dark": {
                 "theme.base": "dark",  # Tema base escuro
-                "theme.primaryColor": "#ff521a",  # Cor primária
+                "theme.primaryColor": "#291ad9",  # Cor primária
                 "theme.backgroundColor": "black",
                 "theme.secondaryBackgroundColor": "#262730",  # Cor de fundo
                 "theme.textColor": "white",  # Cor do texto
-                "button_face": "🌞",  # Ícone para alternar para o tema claro
+                "button_face": ":material/dark_mode:",  # Ícone para alternar para o tema claro
                 "logo": "logo_dark.png",  # Logo para o tema escuro
             }
         }
@@ -103,8 +103,6 @@ def dashboard():
     if opcao_selecionada == "Visão Geral":
         
         st.title("Produtividade Geral")
-
-        st.header("Visão Geral")
 
         # Filtros de data
         min_date = df_total['DATA DE CONCLUSÃO DA TAREFA'].min().date() if not df_total.empty else datetime.today().date()
@@ -241,7 +239,7 @@ def dashboard():
             
             
     elif opcao_selecionada == "Métricas Individuais":
-        st.header("Métricas Individuais")
+        st.title("Métricas Individuais")
         
         # Filtro de data
         st.subheader("Filtro por Data")
@@ -271,6 +269,8 @@ def dashboard():
             total_finalizados_analista = 0
         if total_atualizado_analista is None:
             total_atualizado_analista = 0
+        if total_realizados_analista is None:
+            total_realizados_analista = 0
             
         st.write(
             """
@@ -282,6 +282,7 @@ def dashboard():
             """,
             unsafe_allow_html=True,
         )
+            
         col1, col2, col3 = st.columns(3)
         with col1:
             with st.container(border=True):
@@ -297,7 +298,26 @@ def dashboard():
             if tempo_medio_analista > tmo_equipe:
                 st.toast(f"O tempo médio de operação do analista {analista_selecionado} ({format_timedelta(tempo_medio_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe)}).", icon="🚨")
             else:
-                pass            
+                pass     
+
+        melhor_dia_tmo, melhor_tmo = calcular_melhor_tmo_por_dia(df_analista)
+        melhor_dia_cadastro, quantidade_cadastro = calcular_melhor_dia_por_cadastro(df_analista)
+    
+        with st.expander("Melhor TMO e Quantidade de Cadastro"):
+            col1, col2 = st.columns(2)
+            with col1:
+                with st.container(border=True):
+                    if melhor_dia_tmo and melhor_tmo:
+                        formatted_tmo = format_timedelta(melhor_tmo)
+                        st.metric("Melhor TMO", formatted_tmo, f"Dia {melhor_dia_tmo.strftime('%d/%m/%Y')}")
+                    else:
+                        st.metric("Melhor TMO", "Sem dados")
+            with col2:
+                with st.container(border=True):
+                    if melhor_dia_cadastro:
+                            st.metric("Melhor Dia de Cadastros", quantidade_cadastro, f"Dia {melhor_dia_cadastro.strftime('%d/%m/%Y')}")
+                    else:
+                        st.metric("Melhor Dia de Cadastros", "Sem dados")
 
         # Exibe o DataFrame estilizado com as filas realizadas pelo analista
         with st.container(border=True):
@@ -314,7 +334,36 @@ def dashboard():
             df_tempo_ocioso = calcular_tempo_ocioso_por_analista(df_analista)
             st.dataframe(df_tempo_ocioso, hide_index=True, use_container_width=True)
                     
-        # Gráficos de pizza usando as funções do `graph.py`
+        st.write("---")
+        
+        with st.expander("Evolução TMO"):
+            st.subheader(f"Tempo Médio Operacional Mensal")
+            exibir_tmo_por_mes_analista(df_analista, analista_selecionado)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            # Gráfico de TMO por dia usando a função do `graph.py`
+            with st.container(border=True):
+                st.subheader(f"Tempo Médio Operacional por Dia")
+                exibir_grafico_tmo_por_dia(
+                df_analista=df_analista,
+                analista_selecionado=analista_selecionado,
+                calcular_tmo_por_dia=calcular_tmo_por_dia,
+                custom_colors=custom_colors,
+                st=st
+            )
+
+        with col2:
+            # Gráfico de TMO por dia usando a função do `graph.py`
+            with st.container(border=True):
+                st.subheader(f"Quantidade de Tarefas por Dia")
+                exibir_grafico_quantidade_por_dia(
+                    df_analista=df_analista,
+                    analista_selecionado=analista_selecionado,
+                    custom_colors=custom_colors,
+                    st=st
+            )
+        
         col1, col2 = st.columns(2)
         
         total_completo_analista = len(df_analista[df_analista['FINALIZAÇÃO'] == 'Subsídio Completo'])
@@ -336,17 +385,6 @@ def dashboard():
                     custom_colors=custom_colors,
                     st=st
                 )
-
-        # Gráfico de TMO por dia usando a função do `graph.py`
-        with st.container(border=True):
-            st.subheader(f"Tempo Médio Operacional por Dia do Analista - {analista_selecionado}")
-            exibir_grafico_tmo_por_dia(
-            df_analista=df_analista,
-            analista_selecionado=analista_selecionado,
-            calcular_tmo_por_dia=calcular_tmo_por_dia,
-            custom_colors=custom_colors,
-            st=st
-        )
 
     if st.sidebar.button("Logout", icon=":material/logout:"):
         st.session_state.logado = False
