@@ -21,6 +21,7 @@ def dashboard():
     background-color: rgba(255, 255, 255, 0); /* Torna o fundo do cabeçalho transparente */
     color: transparent; /* Remove o texto do cabeçalho (opcional) */
     box-shadow: none; /* Remove a sombra (opcional) */
+    display: none;
     }
     [data-testid="stHeader"] {
         background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
@@ -54,6 +55,10 @@ def dashboard():
     #MainMenu {
         visibility: hidden;
         }   
+    
+    #GithubIcon {
+        visibility: hidden;
+    }
     </style>
     """
     st.markdown(background_image_css, unsafe_allow_html=True)

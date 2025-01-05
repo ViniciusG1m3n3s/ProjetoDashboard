@@ -91,16 +91,13 @@ def login():
     #MainMenu {
         visibility: hidden;
         }   
-    </style>
-    """
-    st.markdown(background_image_css, unsafe_allow_html=True)
-    
-    hide_github_icon = """
     #GithubIcon {
     visibility: hidden;
     }
+    </style>
     """
-    st.markdown(hide_github_icon, unsafe_allow_html=True)
+    st.markdown(background_image_css, unsafe_allow_html=True)
+
     
     
     return False  # Retorna False se o login falhar
