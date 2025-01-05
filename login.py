@@ -11,8 +11,8 @@ def autenticar(usuario, senha):
 # Função para carregar o dashboard dependendo do domínio do usuário
 def login():
     st.logo("finch.png")
-    usuario = st.sidebar.text_input("Usuário", placeholder="👤 Usuário", label_visibility="collapsed")
-    senha = st.sidebar.text_input("Senha", type="password", placeholder="🔑 *********", label_visibility="collapsed")
+    usuario = st.sidebar.text_input("Usuário")
+    senha = st.sidebar.text_input("Senha", type="password")
 
     if st.sidebar.button("Entrar", icon=":material/login:", use_container_width=True, type="primary"):
         if autenticar(usuario, senha):
@@ -26,12 +26,32 @@ def login():
     background_image_css = """
     <style>
     [data-testid="stAppViewContainer"] {
-        background-image: url("https://i.imgur.com/wdWNqgq.png");
+        background: 
+            linear-gradient(
+                to left,
+                rgba(211, 33, 0, 0.7),
+                rgba(175, 15, 26, 0.7),
+                rgba(136, 12, 33, 0.7),
+                rgba(96, 15, 33, 0.7),
+                rgba(54, 4, 38, 0.7),
+                rgba(84, 0, 117, 0.7)
+            ),
+            url("https://i.pinimg.com/originals/ef/c3/85/efc3857811ea0813316475b79af16c7c.jpg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
         background-attachment: fixed;
-        background-color: rgba(0, 0, 0, 0.3); /* Adiciona uma camada de transparência escura */
+    }
+        @keyframes gradientAnimation {
+        0% {
+            background-position: 0% 50%;
+        }
+        50% {
+            background-position: 100% 50%;
+        }
+        100% {
+            background-position: 0% 50%;
+        }
     }
     header {
     background-color: rgba(255, 255, 255, 0); /* Torna o fundo do cabeçalho transparente */
@@ -41,13 +61,7 @@ def login():
     [data-testid="stHeader"] {
         background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
     }
-    #     /* Aplica transparência com blur à sidebar */
-    # [data-testid="stSidebar"] {
-    #     background-color: rgba(128, 128, 128, 0.5); /* Cinza translucido */
-    #     backdrop-filter: blur(1px); /* Efeito de desfoque */
-    #     -webkit-backdrop-filter: blur(10px); /* Compatibilidade com navegadores Webkit */
-    # }
-    # </style>
+    </style>
     """
     st.markdown(background_image_css, unsafe_allow_html=True)
     

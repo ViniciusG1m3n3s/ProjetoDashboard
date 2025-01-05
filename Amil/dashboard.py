@@ -7,7 +7,20 @@ from datetime import datetime
 
 
 def dashboard():    
-        
+    background_image_css = """
+    <style>
+    header {
+    background-color: rgba(255, 255, 255, 0); /* Torna o fundo do cabeçalho transparente */
+    color: transparent; /* Remove o texto do cabeçalho (opcional) */
+    box-shadow: none; /* Remove a sombra (opcional) */
+    }
+    [data-testid="stHeader"] {
+        background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
+    }
+    </style>
+    """
+    st.markdown(background_image_css, unsafe_allow_html=True)
+    
     # Carregar dados
     usuario_logado = st.session_state.usuario_logado
     df_total = load_data(usuario_logado)
