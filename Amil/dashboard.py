@@ -17,6 +17,13 @@ def dashboard():
     [data-testid="stHeader"] {
         background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
     }
+    .stToolbarActions st-emotion-cache-1p1m4ay e3i9eg820 {
+        background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
+    }
+    
+    .stAppToolbar st-emotion-cache-15ecox0 e10jh26i2 {
+        background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
+    }
     </style>
     """
     st.markdown(background_image_css, unsafe_allow_html=True)
@@ -37,6 +44,11 @@ def dashboard():
         df_total = pd.concat([df_total, df_new], ignore_index=True)
         save_data(df_total, usuario_logado)
         st.sidebar.success(f'Arquivo "{uploaded_file.name}" carregado com sucesso!')
+        
+
+    if usuario_logado == "bianca@amil" and not hasattr(st.session_state, 'bianca_welcomed'):
+        st.toast("Bem-vindo, Bianca!", icon=":material/account_circle:")
+        st.session_state.bianca_welcomed = True
 
     # Converte para cálculos temporários
     df_total = convert_to_timedelta_for_calculations(df_total)
