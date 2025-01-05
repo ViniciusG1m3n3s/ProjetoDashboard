@@ -24,6 +24,18 @@ def dashboard():
     .stAppToolbar st-emotion-cache-15ecox0 e10jh26i2 {
         background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
     }
+    
+        /* Seleciona a barra do Streamlit */
+    .st-emotion-cache-15ecox0 {
+        background-color: rgba(255, 255, 255, 0.0) !important; /* Transparente */
+        box-shadow: none !important; /* Remove sombra */
+    }
+
+    /* Remove bordas e sombras adicionais */
+    .stToolbarActions, .st-emotion-cache-czk5ss {
+        background-color: rgba(255, 255, 255, 0.0) !important;
+        box-shadow: none !important;
+    }
     </style>
     """
     st.markdown(background_image_css, unsafe_allow_html=True)
