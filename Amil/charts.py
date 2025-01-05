@@ -3,7 +3,6 @@ import os
 import pandas as pd
 import streamlit as st
 import plotly.graph_objs as go
-import altair as alt
 
 def plot_produtividade_diaria(df_produtividade, custom_colors):
     if df_produtividade.empty or 'Dia' not in df_produtividade.columns or 'Produtividade' not in df_produtividade.columns:
