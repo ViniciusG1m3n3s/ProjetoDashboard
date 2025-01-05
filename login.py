@@ -61,9 +61,46 @@ def login():
     [data-testid="stHeader"] {
         background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
     }
+    
+        .stToolbarActions st-emotion-cache-1p1m4ay e3i9eg820 {
+        background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
+    }
+    
+    .stAppToolbar st-emotion-cache-15ecox0 e10jh26i2 {
+        background-color: rgba(255, 255, 255, 0); /* Transparente no novo identificador */
+    }
+    
+        /* Seleciona a barra do Streamlit */
+    .st-emotion-cache-15ecox0 {
+        background-color: rgba(255, 255, 255, 0.0) !important; /* Transparente */
+        box-shadow: none !important; /* Remove sombra */
+    }
+
+    /* Remove bordas e sombras adicionais */
+    .stToolbarActions, .st-emotion-cache-czk5ss {
+        background-color: rgba(255, 255, 255, 0.0) !important;
+        box-shadow: none !important;
+    }
+    
+    .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
+    .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
+    .viewerBadge_text__1JaDK {
+        display: none;
+    }
+    
+    #MainMenu {
+        visibility: hidden;
+        }   
     </style>
     """
     st.markdown(background_image_css, unsafe_allow_html=True)
+    
+    hide_github_icon = """
+    #GithubIcon {
+    visibility: hidden;
+    }
+    """
+    st.markdown(hide_github_icon, unsafe_allow_html=True)
     
     
     return False  # Retorna False se o login falhar
