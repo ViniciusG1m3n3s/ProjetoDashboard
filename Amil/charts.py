@@ -22,21 +22,78 @@ def plot_produtividade_diaria(df_produtividade, custom_colors):
                         hovertemplate='Dia = %{x|%d/%m/%Y}<br>Produtividade = %{y}'
                     )
         st.plotly_chart(fig_produtividade)
+        
+def plot_produtividade_diaria_cadastros(df_produtividade_cadastro, custom_colors):
+    if df_produtividade_cadastro.empty or 'Dia' not in df_produtividade_cadastro.columns or 'Produtividade' not in df_produtividade_cadastro.columns:
+        st.warning("Não há dados para exibir no gráfico de produtividade diária.")
+    else:
+        fig_produtividade = px.line(
+                        df_produtividade_cadastro,
+                        x='Dia',
+                        y='Produtividade',
+                        color_discrete_sequence=custom_colors,
+                        labels={'Produtividade': 'Total de Cadastros'},
+                        line_shape='linear',
+                        markers=True
+                    )
+        fig_produtividade.update_traces(
+                        hovertemplate='Dia = %{x|%d/%m/%Y}<br>Produtividade = %{y}'
+                    )
+        st.plotly_chart(fig_produtividade)
 
 def plot_tmo_por_dia(df_tmo, custom_colors):
     if df_tmo.empty or 'Dia' not in df_tmo.columns or 'TMO' not in df_tmo.columns:
         st.warning("Não há dados para exibir no gráfico de TMO por dia.")
         return None
 
-    if isinstance(df_tmo['TMO'].iloc[0], str):
-        df_tmo['TMO'] = pd.to_timedelta(df_tmo['TMO'].apply(lambda x: x.replace(' min', 'm').replace('s', 's')))
-    
-    df_tmo['TMO_Formatado'] = df_tmo['TMO'].apply(lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}")
-    
+    # Garantir que não existam NaN ou valores inválidos na coluna 'TMO'
+    df_tmo = df_tmo.dropna(subset=['TMO'])
+
+    # Verificar e formatar a coluna TMO como minutos e segundos
+    df_tmo['TMO_Formatado'] = df_tmo['TMO'].apply(
+        lambda x: f"{int(x.total_seconds() // 60):02}:{int(x.total_seconds() % 60):02}" if pd.notnull(x) else "00:00"
+    )
+
+    # Criar o gráfico de linhas
     fig_tmo_linha = px.line(
         df_tmo,
         x='Dia',
-        y=df_tmo['TMO'].dt.total_seconds() / 60,  # Converte TMO para minutos
+        y=df_tmo['TMO'].dt.total_seconds() / 60,  # Converter TMO para minutos
+        labels={'y': 'Tempo Médio Operacional (min)', 'Dia': 'Data'},
+        color_discrete_sequence=custom_colors,
+        line_shape='linear',
+        markers=True
+    )
+
+    fig_tmo_linha.update_layout(
+        xaxis=dict(
+            tickvals=df_tmo['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo['Dia']]
+        )
+    )
+
+    # Personalizar o hover e exibir o gráfico
+    fig_tmo_linha.update_traces(
+        text=df_tmo['TMO_Formatado'],
+        textposition='top center',
+        hovertemplate='Data = %{x|%d/%m/%Y}<br>TMO = %{text}'
+    )
+    return fig_tmo_linha
+
+def plot_tmo_por_dia_cadastro(df_tmo_cadastro, custom_colors):
+    if df_tmo_cadastro.empty or 'Dia' not in df_tmo_cadastro.columns or 'TMO' not in df_tmo_cadastro.columns:
+        st.warning("Não há dados para exibir no gráfico de TMO por dia.")
+        return None
+
+    if isinstance(df_tmo_cadastro['TMO'].iloc[0], str):
+        df_tmo_cadastro['TMO'] = pd.to_timedelta(df_tmo_cadastro['TMO'].apply(lambda x: x.replace(' min', 'm').replace('s', 's')))
+    
+    df_tmo_cadastro['TMO_Formatado'] = df_tmo_cadastro['TMO'].apply(lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}")
+    
+    fig_tmo_linha = px.line(
+        df_tmo_cadastro,
+        x='Dia',
+        y=df_tmo_cadastro['TMO'].dt.total_seconds() / 60,  # Converte TMO para minutos
         labels={'y': 'Tempo Médio Operacional (min)', 'Dia': 'Data'},
         color_discrete_sequence=custom_colors,
         line_shape='linear',
@@ -45,18 +102,19 @@ def plot_tmo_por_dia(df_tmo, custom_colors):
     
     fig_tmo_linha.update_layout(
         xaxis=dict(
-            tickvals=df_tmo['Dia'],
-            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo['Dia']]
+            tickvals=df_tmo_cadastro['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo_cadastro['Dia']]
     )
 )
     
     fig_tmo_linha.update_traces(
-        text=df_tmo['TMO_Formatado'],
+        text=df_tmo_cadastro['TMO_Formatado'],
         textposition='top center',
         hovertemplate='Data = %{x|%d/%m/%Y}<br>TMO = %{text}'
     )
 
     return fig_tmo_linha
+
 def plot_status_pie(total_parcial, total_nao_tratada, total_completa, custom_colors):
     fig_status = px.pie(
         names=['Subsídio Parcial', 'Fora do Escopo', 'Subsídio Completo'],

@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista
-from .charts import plot_produtividade_diaria, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
+from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
+from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_tmo_por_dia_cadastro, plot_produtividade_diaria_cadastros, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
 from datetime import datetime
 import pdfkit
 from reportlab.lib.pagesizes import letter
@@ -42,7 +42,7 @@ def dashboard():
             # Definições para o tema claro
             "light": {
                 "theme.base": "light",  # Tema base claro
-                "theme.primaryColor": "#291ad9",  # Cor primária
+                "theme.primaryColor": "#ff521a",  # Cor primária
                 "theme.backgroundColor": "#FFFFFF",
                 "theme.secondaryBackgroundColor": "#F0F2F6",  # Cor de fundo
                 "theme.textColor": "#31333F",  # Cor do texto
@@ -53,7 +53,7 @@ def dashboard():
             # Definições para o tema escuro
             "dark": {
                 "theme.base": "dark",  # Tema base escuro
-                "theme.primaryColor": "#291ad9",  # Cor primária
+                "theme.primaryColor": "#ff521a",  # Cor primária
                 "theme.backgroundColor": "black",
                 "theme.secondaryBackgroundColor": "#262730",  # Cor de fundo
                 "theme.textColor": "white",  # Cor do texto
@@ -102,12 +102,13 @@ def dashboard():
     
     if opcao_selecionada == "Visão Geral":
         
-        st.title("Produtividade Geral")
+        st.title("Produtividade Geral" + " " + "" + " " + ":material/groups:")
 
         # Filtros de data
         min_date = df_total['DATA DE CONCLUSÃO DA TAREFA'].min().date() if not df_total.empty else datetime.today().date()
         max_date = df_total['DATA DE CONCLUSÃO DA TAREFA'].max().date() if not df_total.empty else datetime.today().date()
-
+        
+        st.subheader("Filtro por Data")
         col1, col2 = st.columns(2)
         with col1:
             data_inicial = st.date_input("Data Inicial", min_date)
@@ -120,31 +121,66 @@ def dashboard():
         df_total = df_total[(df_total['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicial) & (df_total['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_final)]
 
         # Métricas de produtividade
-        total_finalizados = len(df_total[df_total['SITUAÇÃO DA TAREFA'] == 'Finalizada'])
-        total_reclass = len(df_total[df_total['SITUAÇÃO DA TAREFA'] == 'Cancelada'])
-        
-        # Verifique se o denominador não é zero
-        if (total_finalizados + total_reclass) > 0:
-            # Se houver cadastros finalizados ou reclassificados, calcula o tempo médio
-            tempo_medio = (df_total[df_total['SITUAÇÃO DA TAREFA'] == 'Finalizada']['TEMPO MÉDIO OPERACIONAL'].sum() + 
-                        df_total[df_total['SITUAÇÃO DA TAREFA'] == 'Cancelada']['TEMPO MÉDIO OPERACIONAL'].sum()) / (total_finalizados + total_reclass)
-        else:
-            # Se não houver cadastros finalizados ou reclassificados, define o tempo médio como zero ou outro valor padrão
-            tempo_medio = pd.Timedelta(0)  # ou "0 min"
+        total_finalizados = len(df_total[df_total['FINALIZAÇÃO'] == 'CADASTRADO'])
+        total_atualizados = len(df_total[df_total['FINALIZAÇÃO'] == 'ATUALIZADO'])
+        total_distribuidos = len(df_total[df_total['FINALIZAÇÃO'] == 'REALIZADO'])
+        total_geral = total_finalizados + total_atualizados + total_distribuidos
 
-        col1, col2, col3, col4 = st.columns(4)
+        # Calcular tempo médio geral, verificando se o total geral é maior que zero
+        if total_geral > 0:
+            tempo_medio = (
+                df_total[df_total['FINALIZAÇÃO'] == 'CADASTRADO']['TEMPO MÉDIO OPERACIONAL'].sum() +
+                df_total[df_total['FINALIZAÇÃO'] == 'ATUALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum() +
+                df_total[df_total['FINALIZAÇÃO'] == 'REALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+            ) / total_geral
+        else:
+            tempo_medio = pd.Timedelta(0)  # Define como 0 se não houver dados
+
+        # Calcular tempo médio de cadastros, verificando se o total de cadastros é maior que zero
+        if total_finalizados > 0:
+            tempo_medio_cadastros = (
+                df_total[df_total['FINALIZAÇÃO'] == 'CADASTRADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+            ) / total_finalizados
+        else:
+            tempo_medio_cadastros = pd.Timedelta(0)
+
+        # Calcular tempo médio de atualizações, verificando se o total de atualizações é maior que zero
+        if total_atualizados > 0:
+            tempo_medio_autalizacoes = (
+                df_total[df_total['FINALIZAÇÃO'] == 'ATUALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+            ) / total_atualizados
+        else:
+            tempo_medio_autalizacoes = pd.Timedelta(0)
+
+        # Calcular tempo médio de distribuições, verificando se o total de distribuições é maior que zero
+        if total_distribuidos > 0:
+            tempo_medio_distribuicoes = (
+                df_total[df_total['FINALIZAÇÃO'] == 'REALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+            ) / total_distribuidos
+        else:
+            tempo_medio_distribuicoes = pd.Timedelta(0)
+            
+        st.write(
+            """
+            <style>
+            [data-testid="stMetricDelta"] svg {
+                display: none;  
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        col1, col2, col3 = st.columns(3)
         with col1:
             with st.container(border=True):
-                st.metric("Total Geral", total_finalizados + total_reclass)
+                st.metric("Total Geral", total_geral, delta=f"Tempo Médio - " + format_timedelta(tempo_medio), delta_color="off")
         with col2:
             with st.container(border=True):
-                st.metric("Tarefas Finalizadas", total_finalizados)
+                st.metric("Total Cadastrado", total_finalizados, delta=f"Tempo Médio - " + format_timedelta(tempo_medio_cadastros), delta_color="off")
         with col3:
             with st.container(border=True):
-                st.metric("Tarefas Canceladas", total_reclass)
-        with col4:
-            with st.container(border=True):
-                st.metric("Tempo Médio por Cadastro", format_timedelta(tempo_medio))     
+                st.metric("Total Atualizado", total_atualizados, delta=f"Tempo Médio - " + format_timedelta(tempo_medio_autalizacoes), delta_color="off")
         
         # Expander com Total Geral --- Sendo a soma de todos os cadastros, reclassificados e andamentos
         with st.expander("Tempo Médio por Fila"):
@@ -157,40 +193,58 @@ def dashboard():
         # Calculando e exibindo gráficos
         df_produtividade = calcular_produtividade_diaria(df_total)
         
+        df_produtividade_cadastro = calcular_produtividade_diaria_cadastro(df_total)
+        
         df_tmo = calcular_tmo_por_dia(df_total)  # Certifique-se de que essa função retorne os dados necessários para o gráfico
         
-        tab1, tab2 = st.tabs(["Produtividade Diária", "TMO por Dia"])
+        df_tmo_cadastro = calcular_tmo_por_dia_cadastro(df_total)  # Certifique-se de que essa função retorne os dados necessários para o gráfico
         
-        with tab1:
-            with st.container(border=True):
-                st.subheader("Produtividade Diária")
-                fig_produtividade = plot_produtividade_diaria(df_produtividade, custom_colors)
-                if fig_produtividade:
-                    st.plotly_chart(fig_produtividade)
-
-        with tab2:
-            with st.container(border=True):
-                st.subheader("TMO por Dia")
-                fig_tmo = plot_tmo_por_dia(df_tmo, custom_colors)
-                if fig_tmo:
-                    st.plotly_chart(fig_tmo)
-                    
-        total_completa = len(df_total[df_total['FINALIZAÇÃO'] == 'Subsídio Completo'])
-        total_parcial = len(df_total[df_total['FINALIZAÇÃO'] == 'Subsídio Parcial'])
-        total_nao_tratada = len(df_total[df_total['FINALIZAÇÃO'] == 'Fora do Escopo'])
+        col1, col2 = st.columns(2)
         
-        with st.container(border=True):
-            exibir_tmo_por_mes(df_total)
-            # Exibir o DataFrame formatado na seção correspondente
-            df_tmo_formatado = exibir_dataframe_tmo_formatado(df_total)
-
-        with st.container(border=True):
-            # Gráfico de Status
-            st.subheader("Status de Produtividade")
-            st.plotly_chart(plot_status_pie(total_parcial, total_nao_tratada, total_completa, custom_colors))
+        with col1:
             
-            #Grafico de TMO por Analista
-            df_tmo_analista = calcular_tmo(df_total)
+            tab1, tab2 = st.tabs(["Produtividade Diária", "Cadastros e Atualizações Diários"])
+            
+            with tab1:
+
+                with st.container(border=True):
+                    st.subheader("Produtividade Diária - Geral")
+                    fig_produtividade = plot_produtividade_diaria(df_produtividade, custom_colors)
+                    if fig_produtividade:
+                        st.plotly_chart(fig_produtividade)
+            
+            with tab2:
+                with st.container(border=True):
+                    st.subheader("Produtividade Diária - Cadastros e Atualizações")
+                    fig_produtividade = plot_produtividade_diaria_cadastros(df_produtividade_cadastro, custom_colors)
+                    if fig_produtividade:
+                        st.plotly_chart(fig_produtividade)
+                        
+        with col2:
+        
+            tab1, tab2 = st.tabs(["TMO Geral Diário", "TMO Cadastro Diário"])
+            
+            with tab1:
+                with st.container(border=True):
+                    st.subheader("Tempo Médio Operacional Diario - Geral")
+                    fig_tmo = plot_tmo_por_dia(df_tmo, custom_colors)
+                    if fig_tmo:
+                        st.plotly_chart(fig_tmo)
+                        
+            with tab2:
+                with st.container(border=True):
+                    st.subheader("Tempo Médio Operacional Diário - Cadastros")
+                    fig_tmo = plot_tmo_por_dia_cadastro(df_tmo_cadastro, custom_colors)
+                    if fig_tmo:
+                        st.plotly_chart(fig_tmo)
+                            
+        with st.expander("Tempo Médio Operacional por Mês"):
+                exibir_tmo_por_mes(df_total)
+                # Exibir o DataFrame formatado na seção correspondente
+                df_tmo_formatado = exibir_dataframe_tmo_formatado(df_total)
+                
+                #Grafico de TMO por Analista
+                df_tmo_analista = calcular_tmo(df_total)
 
         with st.container(border=True):
             # Filtro de analistas
@@ -221,21 +275,36 @@ def dashboard():
             st.dataframe(styled_df_ranking, width=2000)
         
         with st.expander("Exportar Dados"):
-            export_dataframe(df_total)
-            if not df_total.empty:
-                buffer = BytesIO()
-                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df_total.to_excel(writer, index=False, sheet_name='Dados_Acumulados')
-                buffer.seek(0)
-                
-                st.download_button(
-                    label="Download dados acumulados",
-                    data=buffer,
-                    file_name=f"dados_acumulados_{usuario_logado}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            try:
+                # Seleção do período
+                data_inicial_relatorio = st.date_input(
+                    "Data Inicial Relatório", 
+                    df_total['DATA DE CONCLUSÃO DA TAREFA'].min().date()
                 )
-            else:
-                st.warning("Nenhum dado disponível para download.")
+                data_final_relatorio = st.date_input(
+                    "Data Final Relatório", 
+                    df_total['DATA DE CONCLUSÃO DA TAREFA'].max().date()
+                )
+
+                # Seleção de analistas
+                analistas_disponiveis = df_total['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
+                analistas_selecionados = st.multiselect(
+                    "Selecione os analistas", 
+                    options=analistas_disponiveis, 
+                    default=analistas_disponiveis
+                )
+                
+                if st.button("Exportar Planilha"):
+                    periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
+                    exportar_planilha_com_tmo(df_total, periodo_selecionado, analistas_selecionados)
+
+            except ValueError as e:
+                st.warning("Ocorreu um erro ao processar as datas. Verifique se as informações de data estão corretas no seu arquivo. Detalhes do erro:")
+                st.code(str(e))
+
+            except Exception as e:
+                st.warning("Ocorreu um erro inesperado. Por favor, tente novamente. Detalhes do erro:")
+                st.code(str(e))
             
             
     elif opcao_selecionada == "Métricas Individuais":
@@ -329,13 +398,11 @@ def dashboard():
                 st=st
             )
             
-        with st.container(border=True):
-            st.subheader(f"Tempo Ocioso")
-            df_tempo_ocioso = calcular_tempo_ocioso_por_analista(df_analista)
-            st.dataframe(df_tempo_ocioso, hide_index=True, use_container_width=True)
-                    
-        st.write("---")
-        
+        with st.expander("Tempo Ocioso"):
+                st.subheader(f"Tempo Ocioso")
+                df_tempo_ocioso = calcular_tempo_ocioso_por_analista(df_analista)
+                st.dataframe(df_tempo_ocioso, hide_index=True, use_container_width=True)
+                            
         with st.expander("Evolução TMO"):
             st.subheader(f"Tempo Médio Operacional Mensal")
             exibir_tmo_por_mes_analista(df_analista, analista_selecionado)
@@ -364,21 +431,8 @@ def dashboard():
                     st=st
             )
         
-        col1, col2 = st.columns(2)
-        
-        total_completo_analista = len(df_analista[df_analista['FINALIZAÇÃO'] == 'Subsídio Completo'])
-        total_parcial_analista = len(df_analista[df_analista['FINALIZAÇÃO'] == 'Subsídio Parcial'])
-        total_fora_analista = len(df_analista[df_analista['FINALIZAÇÃO'] == 'Fora do Escopo'])
-        
-        with col1:
-            with st.container(border=True):
-                st.subheader(f"Status de Finalizações - {analista_selecionado}")
-                fig_status = grafico_status_analista(total_parcial_analista, total_fora_analista, total_completo_analista, custom_colors)
-                st.plotly_chart(fig_status, use_container_width=True)
-
-        with col2:
-            with st.container(border=True):
-                st.subheader(f"Filas Realizadas por  - {analista_selecionado}")                    
+        with st.container(border=True):
+                st.subheader(f"Filas Realizadas")                    
                 exibir_grafico_filas_realizadas(
                     df_analista=df_analista,
                     analista_selecionado=analista_selecionado,

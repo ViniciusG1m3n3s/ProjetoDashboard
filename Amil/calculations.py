@@ -4,6 +4,7 @@ import plotly.express as px
 import math
 import streamlit as st
 from io import BytesIO
+from datetime import timedelta
 
 def load_data(usuario):
     excel_file = f'dados_acumulados_{usuario}.xlsx'  # Caminho completo do arquivo
@@ -42,7 +43,7 @@ def save_data(df, usuario):
 
     # Remove registros com 'USUÁRIO QUE CONCLUIU A TAREFA' igual a 'robohub_amil'
     if 'USUÁRIO QUE CONCLUIU A TAREFA' in df.columns:
-        df = df[df['USUÁRIO QUE CONCLUIU A TAREFA'] != 'robohub_amil']
+        df = df[(df['USUÁRIO QUE CONCLUIU A TAREFA'] != 'robohub_amil') & (df['USUÁRIO QUE CONCLUIU A TAREFA'].notnull())]
 
     # Salva o DataFrame no arquivo Excel
     df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)  # Ajuste de tipo de coluna, se necessário
@@ -94,13 +95,26 @@ def calcular_produtividade_diaria(df):
 
     # Agrupa e soma os status para calcular a produtividade
     df_produtividade = df.groupby('Dia').agg(
+        Finalizado=('FINALIZAÇÃO', 'count'),
+    ).reset_index()
+
+    # Calcula a produtividade total
+    df_produtividade['Produtividade'] = + df_produtividade['Finalizado'] 
+    return df_produtividade
+
+def calcular_produtividade_diaria_cadastro(df):
+    # Garante que a coluna 'Próximo' esteja em formato de data
+    df['Dia'] = df['DATA DE CONCLUSÃO DA TAREFA'].dt.date
+
+    # Agrupa e soma os status para calcular a produtividade
+    df_produtividade_cadastro = df.groupby('Dia').agg(
         Finalizado=('FINALIZAÇÃO', lambda x: x[x == 'CADASTRADO'].count()),
         Atualizado=('FINALIZAÇÃO', lambda x: x[x == 'ATUALIZADO'].count())
     ).reset_index()
 
     # Calcula a produtividade total
-    df_produtividade['Produtividade'] = + df_produtividade['Finalizado'] + df_produtividade['Atualizado']
-    return df_produtividade
+    df_produtividade_cadastro['Produtividade'] = + df_produtividade_cadastro['Finalizado'] + df_produtividade_cadastro['Atualizado']
+    return df_produtividade_cadastro
 
 def convert_to_timedelta_for_calculations(df):
     df['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
@@ -134,6 +148,23 @@ def calcular_tmo_por_dia(df):
     # Formata o tempo médio no formato HH:MM:SS
     df_tmo['TMO'] = df_tmo['TMO'].apply(format_timedelta)
     return df_tmo[['Dia', 'TMO']]
+
+def calcular_tmo_por_dia_cadastro(df):
+    df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
+    df_finalizados_cadastro = df[df['FINALIZAÇÃO'] == 'CADASTRADO'].copy()
+    
+    # Agrupando por dia
+    df_tmo_cadastro = df_finalizados_cadastro.groupby('Dia').agg(
+        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),  # Soma total do tempo
+        Total_Finalizados_Cancelados=('FINALIZAÇÃO', 'count')  # Total de tarefas finalizadas ou canceladas
+    ).reset_index()
+
+    # Calcula o TMO (Tempo Médio Operacional)
+    df_tmo_cadastro['TMO'] = df_tmo_cadastro['Tempo_Total'] / df_tmo_cadastro['Total_Finalizados_Cancelados']
+    
+    # Formata o tempo médio no formato HH:MM:SS
+    df_tmo_cadastro['TMO'] = df_tmo_cadastro['TMO'].apply(format_timedelta)
+    return df_tmo_cadastro[['Dia', 'TMO']]
 
 # Função para calcular o TMO por analista
 def calcular_tmo(df):
@@ -175,10 +206,11 @@ def calcular_ranking(df_total, selected_users):
 
     df_ranking = df_filtered.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
 
-        Finalizado=('SITUAÇÃO DA TAREFA', lambda x: x[x == 'Finalizada'].count()),
-        Cancelada=('SITUAÇÃO DA TAREFA', lambda x: x[x == 'Cancelaao'].count())
+        Finalizado=('FINALIZAÇÃO', lambda x: x[x == 'CADASTRADO'].count()),
+        Distribuido=('FINALIZAÇÃO', lambda x: x[x == 'REALIZADO'].count()),
+        Atualizado=('FINALIZAÇÃO', lambda x: x[x == 'ATUALIZADO'].count())
     ).reset_index()
-    df_ranking['Total'] =df_ranking['Finalizado'] + df_ranking['Cancelada']
+    df_ranking['Total'] =df_ranking['Finalizado'] + df_ranking['Distribuido'] + df_ranking['Atualizado']
     df_ranking = df_ranking.sort_values(by  ='Total', ascending=False).reset_index(drop=True)
     df_ranking.index += 1
     df_ranking.index.name = 'Posição'
@@ -250,13 +282,16 @@ def calcular_metrica_analista(df_analista):
 
 def calcular_tempo_ocioso_por_analista(df):
     try:
-        # Converte as colunas de data para datetime
-        df['DATA DE INÍCIO DA TAREFA'] = pd.to_datetime(df['DATA DE INÍCIO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-        df['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+        # Converte as colunas de data para datetime, tratando erros
+        df['DATA DE INÍCIO DA TAREFA'] = pd.to_datetime(
+            df['DATA DE INÍCIO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce'
+        )
+        df['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(
+            df['DATA DE CONCLUSÃO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce'
+        )
 
-        # Valida se há datas inválidas
-        if df['DATA DE INÍCIO DA TAREFA'].isnull().any() or df['DATA DE CONCLUSÃO DA TAREFA'].isnull().any():
-            raise ValueError("Filtro de data inválido")
+        # Filtrar ou preencher valores nulos nas colunas de data
+        df = df.dropna(subset=['DATA DE INÍCIO DA TAREFA', 'DATA DE CONCLUSÃO DA TAREFA']).reset_index(drop=True)
 
         # Ordena os dados por usuário e data de início da tarefa
         df = df.sort_values(by=['USUÁRIO QUE CONCLUIU A TAREFA', 'DATA DE INÍCIO DA TAREFA']).reset_index(drop=True)
@@ -270,13 +305,15 @@ def calcular_tempo_ocioso_por_analista(df):
 
         # Calcula o tempo ocioso entre tarefas no mesmo dia
         df['TEMPO OCIOSO'] = df.apply(
-            lambda row: (row['PRÓXIMO'] - row['DATA DE CONCLUSÃO DA TAREFA']) if row['DIA_CONCLUSAO'] == row['DIA_PROXIMO'] else pd.Timedelta(0),
+            lambda row: (row['PRÓXIMO'] - row['DATA DE CONCLUSÃO DA TAREFA'])
+            if row['DIA_CONCLUSAO'] == row['DIA_PROXIMO'] else pd.Timedelta(0),
             axis=1
         )
 
         # Filtra para tempo ocioso <= 1 hora e antes das 18h
         df['TEMPO OCIOSO'] = df.apply(
-            lambda row: row['TEMPO OCIOSO'] if (row['TEMPO OCIOSO'] <= pd.Timedelta(hours=1)) and (row['DATA DE CONCLUSÃO DA TAREFA'].hour < 18)
+            lambda row: row['TEMPO OCIOSO']
+            if (row['TEMPO OCIOSO'] <= pd.Timedelta(hours=1)) and (row['DATA DE CONCLUSÃO DA TAREFA'].hour < 18)
             else pd.Timedelta(0),
             axis=1
         )
@@ -302,6 +339,7 @@ def calcular_tempo_ocioso_por_analista(df):
 
         # Retorna o DataFrame sem índice e ajustado para Streamlit
         return df_soma_ocioso[['Data', 'Tempo Ocioso']]
+
     except Exception as e:
         # Em caso de erro, retorna um DataFrame com a mensagem de erro
         error_df = pd.DataFrame({
@@ -488,7 +526,7 @@ def calcular_tmo_por_mes(df):
     df['AnoMes'] = df['DATA DE CONCLUSÃO DA TAREFA'].dt.to_period('M')
     
     # Filtrar apenas os protocolos com status 'FINALIZADO'
-    df_finalizados = df[df['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])]
+    df_finalizados = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO', 'REALIZADO'])]
     
     # Agrupar por AnoMes e calcular o TMO
     df_tmo_mes = df_finalizados.groupby('AnoMes').agg(
@@ -530,14 +568,31 @@ def exibir_tmo_por_mes(df):
         # Formatar a coluna TMO como "X min Ys"
         df_tmo_mes['TMO_Formatado'] = df_tmo_mes['TMO'].apply(format_timedelta_mes)
         
-        st.subheader("TMO por Mês")        
-        # Crie e exiba o gráfico de barras do TMO mensal
+        st.subheader("Tempo Médio Operacional Mensal")
+        
+        # Crie um multiselect para os meses
+        meses_disponiveis = df_tmo_mes['AnoMes'].unique()
+        meses_selecionados = st.multiselect(
+            "Selecione os meses para exibição",
+            options=meses_disponiveis,
+            default=meses_disponiveis
+        )
+        
+        # Filtrar os dados com base nos meses selecionados
+        df_tmo_mes_filtrado = df_tmo_mes[df_tmo_mes['AnoMes'].isin(meses_selecionados)]
+        
+        # Verificar se há dados após o filtro
+        if df_tmo_mes_filtrado.empty:
+            st.warning("Nenhum dado disponível para os meses selecionados.")
+            return None
+        
+        # Crie e exiba o gráfico de barras
         fig = px.bar(
-            df_tmo_mes, 
+            df_tmo_mes_filtrado, 
             x='AnoMes', 
             y='TMO', 
             labels={'AnoMes': 'Mês', 'TMO': 'TMO (minutos)'},
-            text=df_tmo_mes['TMO_Formatado'], # Usar o TMO formatado como rótulo
+            text=df_tmo_mes_filtrado['TMO_Formatado'], # Usar o TMO formatado como rótulo
             color_discrete_sequence=['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']  # Cor azul
         )
         # Garantir que o eixo X seja tratado como categórico
@@ -654,8 +709,6 @@ def exibir_tmo_por_mes_analista(df_analista, analista_selecionado):
         st.warning("Nenhum dado disponível para os meses selecionados.")
         return None
 
-    st.subheader(f"TMO Mensal - {analista_selecionado}")
-
     # Criar e exibir o gráfico de barras
     fig = px.bar(
         df_tmo_mes_filtrado,
@@ -675,3 +728,127 @@ def exibir_tmo_por_mes_analista(df_analista, analista_selecionado):
     st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
 
     return df_tmo_formatado
+
+def calcular_tmo_personalizado(df):
+    """
+    Calcula o TMO considerando as regras específicas para cada tipo de tarefa.
+
+    Parâmetros:
+        - df: DataFrame com os dados filtrados.
+
+    Retorno:
+        - DataFrame com TMO calculado por analista.
+    """
+    # Filtrar tarefas por tipo de finalização
+    total_finalizados = len(df[df['FINALIZAÇÃO'] == 'CADASTRADO'])
+    total_realizados = len(df[df['FINALIZAÇÃO'] == 'REALIZADO'])
+    total_atualizado = len(df[df['FINALIZAÇÃO'] == 'ATUALIZADO'])
+
+    # Calcular o tempo total por tipo de finalização
+    tempo_total_cadastrado = df[df['FINALIZAÇÃO'] == 'CADASTRADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+    tempo_total_atualizado = df[df['FINALIZAÇÃO'] == 'ATUALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+    tempo_total_realizado = df[df['FINALIZAÇÃO'] == 'REALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+
+    # Calcular o tempo médio por tipo de finalização
+    tmo_cadastrado = tempo_total_cadastrado / total_finalizados if total_finalizados > 0 else pd.Timedelta(0)
+    tmo_atualizado = tempo_total_atualizado / total_atualizado if total_atualizado > 0 else pd.Timedelta(0)
+
+    # Calcular o TMO geral
+    tempo_total_analista = tempo_total_cadastrado + tempo_total_atualizado + tempo_total_realizado
+    total_tarefas = total_finalizados + total_atualizado + total_realizados
+    tempo_medio_analista = tempo_total_analista / total_tarefas if total_tarefas > 0 else pd.Timedelta(0)
+
+    return tempo_medio_analista
+
+
+def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados):
+    """
+    Exporta uma planilha com informações do período selecionado, analistas, TMO e quantidade de tarefas,
+    adicionando formatação condicional baseada na média do TMO.
+
+    Parâmetros:
+        - df: DataFrame com os dados.
+        - periodo_selecionado: Tuple contendo a data inicial e final.
+        - analistas_selecionados: Lista de analistas selecionados.
+    """
+    # Filtrar o DataFrame com base no período e analistas selecionados
+    data_inicial, data_final = periodo_selecionado
+    df_filtrado = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicial) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_final) &
+        (df['USUÁRIO QUE CONCLUIU A TAREFA'].isin(analistas_selecionados))
+    ]
+
+    # Calcular o TMO e a quantidade por analista
+    analistas = []
+    tmos = []
+    quantidades = []
+
+    for analista in analistas_selecionados:
+        df_analista = df_filtrado[df_filtrado['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]
+        tmo_analista = calcular_tmo_personalizado(df_analista)
+        quantidade_analista = len(df_analista)
+        
+        analistas.append(analista)
+        tmos.append(tmo_analista)
+        quantidades.append(quantidade_analista)
+
+    # Criar o DataFrame de resumo
+    df_resumo = pd.DataFrame({
+        'Analista': analistas,
+        'TMO': tmos,
+        'Quantidade': quantidades
+    })
+
+    # Adicionar o período ao DataFrame exportado
+    df_resumo['Período Inicial'] = data_inicial
+    df_resumo['Período Final'] = data_final
+
+    # Formatar o TMO como HH:MM:SS
+    df_resumo['TMO'] = df_resumo['TMO'].apply(
+        lambda x: f"{int(x.total_seconds() // 3600):02}:{int((x.total_seconds() % 3600) // 60):02}:{int(x.total_seconds() % 60):02}"
+    )
+
+    # Calcular a média do TMO em segundos
+    tmo_segundos = [timedelta(hours=int(t.split(":")[0]), minutes=int(t.split(":")[1]), seconds=int(t.split(":")[2])).total_seconds() for t in df_resumo['TMO']]
+    media_tmo_segundos = sum(tmo_segundos) / len(tmo_segundos)
+
+    # Criar um arquivo Excel em memória
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        # Exportar os dados
+        df_resumo.to_excel(writer, index=False, sheet_name='Resumo')
+
+        # Acessar o workbook e worksheet para aplicar formatação condicional
+        workbook = writer.book
+        worksheet = writer.sheets['Resumo']
+
+        # Ajustar largura das colunas
+        worksheet.set_column('A:A', 20)  # Coluna 'Analista'
+        worksheet.set_column('B:B', 12)  # Coluna 'TMO'
+        worksheet.set_column('C:C', 15)  # Coluna 'Quantidade'
+        worksheet.set_column('D:E', 15)  # Colunas 'Período Inicial' e 'Período Final'
+
+        # Formatação baseada na média do TMO
+        format_tmo_green = workbook.add_format({'bg_color': '#CCFFCC', 'font_color': '#006600'})  # Verde
+        format_tmo_yellow = workbook.add_format({'bg_color': '#FFFFCC', 'font_color': '#666600'})  # Amarelo
+        format_tmo_red = workbook.add_format({'bg_color': '#FFCCCC', 'font_color': '#FF0000'})  # Vermelho
+
+        # Aplicar formatação condicional
+        for row, tmo in enumerate(tmo_segundos, start=2):
+            if tmo < media_tmo_segundos * 0.9:  # Abaixo da média
+                worksheet.write(f'B{row}', df_resumo.loc[row-2, 'TMO'], format_tmo_green)
+            elif media_tmo_segundos * 0.9 <= tmo <= media_tmo_segundos * 1.1:  # Na média ou próximo
+                worksheet.write(f'B{row}', df_resumo.loc[row-2, 'TMO'], format_tmo_yellow)
+            else:  # Acima da média
+                worksheet.write(f'B{row}', df_resumo.loc[row-2, 'TMO'], format_tmo_red)
+
+    buffer.seek(0)
+
+    # Oferecer download
+    st.download_button(
+        label="Baixar Planilha",
+        data=buffer,
+        file_name="resumo_analistas_formatado.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
