@@ -7,6 +7,15 @@ from datetime import datetime
 
 
 def dashboard():
+    hide_footer_style = """ 
+    <style>
+        ._link_gzau3_10 {
+            display: none;
+        }
+    </style>
+    """
+    st.markdown(hide_footer_style, unsafe_allow_html=True)
+    
     hide_streamlit_style = """
                     <style>
                     div[data-testid="stToolbar"] {
