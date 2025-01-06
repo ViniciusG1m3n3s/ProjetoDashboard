@@ -65,6 +65,14 @@ def dashboard():
     """
     st.markdown(background_image_css, unsafe_allow_html=True)
     
+    hide_streamlit_style = """
+                <style>
+                #MainMenu {visibility: hidden;}
+                footer {visibility: hidden;}
+                </style>
+                """
+    st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+    
     # Carregar dados
     usuario_logado = st.session_state.usuario_logado
     df_total = load_data(usuario_logado)
