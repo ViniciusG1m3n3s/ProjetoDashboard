@@ -349,8 +349,11 @@ def calcular_tempo_ocioso_por_analista(df):
         })
         return error_df
 
-def calcular_tmo_equipe(df_total):
-    return df_total[df_total['SITUAÇÃO DA TAREFA'].isin(['Finalizada', 'Cancelada'])]['TEMPO MÉDIO OPERACIONAL'].mean()
+def calcular_tmo_equipe_cadastro(df_total):
+    return df_total[df_total['FINALIZAÇÃO'].isin(['CADASTRADO'])]['TEMPO MÉDIO OPERACIONAL'].mean()
+
+def calcular_tmo_equipe_atualizado(df_total):
+    return df_total[df_total['FINALIZAÇÃO'].isin(['ATUALIZADO'])]['TEMPO MÉDIO OPERACIONAL'].mean()
 
 def calcular_filas_analista(df_analista):
     if 'Carteira' in df_analista.columns:
@@ -852,3 +855,4 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados):
         file_name="resumo_analistas_formatado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+

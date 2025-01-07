@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from .calculations import calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_tmo_equipe, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
+from .calculations import calcular_tmo_equipe_cadastro, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_tmo_por_dia_cadastro, plot_produtividade_diaria_cadastros, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
 from datetime import datetime
 
@@ -283,13 +283,13 @@ def dashboard():
         col1, col2, col3 = st.columns(3)
         with col1:
             with st.container(border=True):
-                st.metric("Total Geral", total_geral, delta=f"Tempo Médio - " + format_timedelta(tempo_medio), delta_color="off")
+                st.metric("Total Geral", total_geral, delta=f"Tempo Médio - " + format_timedelta(tempo_medio), delta_color="off", help="Engloba todas as tarefas finalizadas e exibe o tempo médio geral.")
         with col2:
             with st.container(border=True):
-                st.metric("Total Cadastrado", total_finalizados, delta=f"Tempo Médio - " + format_timedelta(tempo_medio_cadastros), delta_color="off")
+                st.metric("Total Cadastrado", total_finalizados, delta=f"Tempo Médio - " + format_timedelta(tempo_medio_cadastros), delta_color="off", help="Tempo médio das tarefas cadastradas.")
         with col3:
             with st.container(border=True):
-                st.metric("Total Atualizado", total_atualizados, delta=f"Tempo Médio - " + format_timedelta(tempo_medio_autalizacoes), delta_color="off")
+                st.metric("Total Atualizado", total_atualizados, delta=f"Tempo Médio - " + format_timedelta(tempo_medio_autalizacoes), delta_color="off", help="Tempo médio das tarefas atualizadas.")
         
         # Expander com Total Geral --- Sendo a soma de todos os cadastros, reclassificados e andamentos
         with st.expander("Tempo Médio por Fila"):
@@ -382,6 +382,7 @@ def dashboard():
             
             # Exibir a tabela de ranking
             st.dataframe(styled_df_ranking, width=2000)
+            
         
         with st.expander("Exportar Dados"):
             try:
@@ -438,7 +439,8 @@ def dashboard():
         df_analista = df_total[df_total['USUÁRIO QUE CONCLUIU A TAREFA'] == analista_selecionado].copy()
 
         # Chama as funções de cálculo
-        tmo_equipe = calcular_tmo_equipe(df_total)
+        tmo_equipe_cadastro = calcular_tmo_equipe_cadastro(df_total)
+        tmo_equipe_atualizacao = calcular_tmo_equipe_atualizado(df_total)
         
         total_finalizados_analista, total_atualizado_analista, tempo_medio_analista, tmo_cadastrado_analista, tmo_atualizado_analista, total_realizados_analista = calcular_metrica_analista(df_analista)
 
@@ -472,9 +474,15 @@ def dashboard():
             with st.container(border=True):
                 st.metric("Total Atualizado", total_atualizado_analista, f"Tempo Médio - {format_timedelta(tmo_atualizado_analista)}",  delta_color="off")
         
-        if tempo_medio_analista is not None and tmo_equipe is not None:
-            if tempo_medio_analista > tmo_equipe:
-                st.toast(f"O tempo médio de operação do analista {analista_selecionado} ({format_timedelta(tempo_medio_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe)}).", icon="🚨")
+        if tmo_cadastrado_analista is not None and tmo_equipe_cadastro is not None:
+            if tmo_cadastrado_analista > tmo_equipe_cadastro:
+                st.toast(f"O TMO de Cadastro de {analista_selecionado} ({format_timedelta(tempo_medio_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe_cadastro)}).", icon=":material/warning:")
+            else:
+                pass
+        
+        if tmo_atualizado_analista is not None and tmo_equipe_cadastro is not None:
+            if tmo_atualizado_analista > tmo_equipe_atualizacao:
+                st.toast(f"O TMO de Atualização de {analista_selecionado} ({format_timedelta(tempo_medio_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe_atualizacao)}).", icon=":material/warning:")
             else:
                 pass     
 
