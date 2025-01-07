@@ -764,15 +764,16 @@ def calcular_tmo_personalizado(df):
     return tempo_medio_analista
 
 
-def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados):
+def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, tmo_tipo='GERAL'):
     """
-    Exporta uma planilha com informações do período selecionado, analistas, TMO e quantidade de tarefas,
+    Exporta uma planilha com informações do período selecionado, analistas, TMO (geral ou cadastrado) e quantidade de tarefas,
     adicionando formatação condicional baseada na média do TMO.
 
     Parâmetros:
         - df: DataFrame com os dados.
         - periodo_selecionado: Tuple contendo a data inicial e final.
         - analistas_selecionados: Lista de analistas selecionados.
+        - tmo_tipo: Tipo de TMO a ser usado ('GERAL' ou 'CADASTRADO').
     """
     # Filtrar o DataFrame com base no período e analistas selecionados
     data_inicial, data_final = periodo_selecionado
@@ -789,9 +790,19 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados):
 
     for analista in analistas_selecionados:
         df_analista = df_filtrado[df_filtrado['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]
-        tmo_analista = calcular_tmo_personalizado(df_analista)
-        quantidade_analista = len(df_analista)
-        
+        if tmo_tipo == 'GERAL':
+            # Considerar apenas as finalizações "CADASTRADO", "REALIZADO" e "ATUALIZADO"
+            df_relevante = df_analista[df_analista['FINALIZAÇÃO'].isin(['CADASTRADO', 'REALIZADO', 'ATUALIZADO'])]
+        elif tmo_tipo == 'CADASTRADO':
+            # Considerar apenas as finalizações "CADASTRADO"
+            df_relevante = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+        else:
+            st.error("Tipo de TMO inválido selecionado.")
+            return
+
+        tmo_analista = calcular_tmo_personalizado(df_relevante)
+        quantidade_analista = len(df_relevante)
+
         analistas.append(analista)
         tmos.append(tmo_analista)
         quantidades.append(quantidade_analista)
@@ -855,4 +866,5 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados):
         file_name="resumo_analistas_formatado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
 

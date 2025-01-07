@@ -385,7 +385,7 @@ def dashboard():
             
         
         with st.expander("Exportar Dados"):
-            try:
+            try:    
                 # Seleção do período
                 data_inicial_relatorio = st.date_input(
                     "Data Inicial Relatório", 
@@ -403,10 +403,18 @@ def dashboard():
                     options=analistas_disponiveis, 
                     default=analistas_disponiveis
                 )
-                
+
+                # Seleção do tipo de TMO
+                tmo_tipo = st.radio(
+                    "Selecione o tipo de TMO para exportação:",
+                    options=['GERAL', 'CADASTRADO'],
+                    index=0,
+                    help="Escolha 'GERAL' para considerar todas as tarefas ou 'CADASTRADO' para considerar apenas finalizações de CADASTRO."
+                )
+
                 if st.button("Exportar Planilha"):
                     periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
-                    exportar_planilha_com_tmo(df_total, periodo_selecionado, analistas_selecionados)
+                    exportar_planilha_com_tmo(df_total, periodo_selecionado, analistas_selecionados, tmo_tipo)
 
             except ValueError as e:
                 st.warning("Ocorreu um erro ao processar as datas. Verifique se as informações de data estão corretas no seu arquivo. Detalhes do erro:")
@@ -415,7 +423,6 @@ def dashboard():
             except Exception as e:
                 st.warning("Ocorreu um erro inesperado. Por favor, tente novamente. Detalhes do erro:")
                 st.code(str(e))
-            
             
     elif opcao_selecionada == "Métricas Individuais":
         st.title("Métricas Individuais")
