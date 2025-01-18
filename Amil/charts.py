@@ -134,16 +134,39 @@ def plot_status_pie(total_parcial, total_nao_tratada, total_completa, custom_col
     )
     return fig_status
 
-# Função para gerar o gráfico de TMO por analista
+def format_timedelta_grafico_tmo(td):
+    if pd.isnull(td):
+        return "00:00:00"
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
 def grafico_tmo(df_tmo_analista, custom_colors):
-    # Gráfico de barras de TMO por analista em minutos
+    # Verifica se o DataFrame está vazio
+    if df_tmo_analista.empty:
+        return None  # Retorna None se não houver dados
+    
+    # Certifica-se de que a coluna 'TMO' é do tipo timedelta
+    if 'TMO' not in df_tmo_analista or not pd.api.types.is_timedelta64_dtype(df_tmo_analista['TMO']):
+        raise ValueError("A coluna 'TMO' precisa estar no formato timedelta. Verifique os dados.")
+
+    # Certifique-se de que 'TMO_Formatado' existe para exibição no gráfico
+    if 'TMO_Formatado' not in df_tmo_analista:
+        df_tmo_analista['TMO_Formatado'] = df_tmo_analista['TMO'].apply(format_timedelta_grafico_tmo)
+
+    # Cria o gráfico de barras
     fig_tmo_analista = px.bar(
         df_tmo_analista,
         x='USUÁRIO QUE CONCLUIU A TAREFA',
         y=df_tmo_analista['TMO'].dt.total_seconds() / 60,  # TMO em minutos
-        labels={'y': 'Tempo Médio Operacional (min)', 'x': 'Analista', 'USUÁRIO QUE CONCLUIU A TAREFA': 'Analista'},
+        labels={
+            'y': 'Tempo Médio Operacional (min)', 
+            'x': 'Analista', 
+            'USUÁRIO QUE CONCLUIU A TAREFA': 'Analista'
+        },
         text=df_tmo_analista['TMO_Formatado'],
-        color_discrete_sequence=custom_colors
+        color_discrete_sequence=custom_colors or px.colors.qualitative.Set2
     )
     fig_tmo_analista.update_traces(
         textposition='outside',  # Exibe o tempo formatado fora das barras

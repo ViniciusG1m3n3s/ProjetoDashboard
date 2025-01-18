@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from .calculations import calcular_tmo_equipe_cadastro, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
+from .calculations import calcular_tmo_equipe_cadastro, load_sla_data, calcular_sla_por_fila, gerar_planilha_sla, calcular_entrada_protocolos_por_dia, calcular_entrada_por_dia_e_fila, exibir_entrada_por_dia, save_sla_data, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_tmo_por_dia_cadastro, plot_produtividade_diaria_cadastros, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
 from datetime import datetime
-
+from Amil.diario import diario
 
 def dashboard():
     hide_footer_style = """ 
@@ -206,7 +206,7 @@ def dashboard():
     if ms.themes["refreshed"] == False:
         ms.themes["refreshed"] = True
         st.rerun()
-
+        
     custom_colors = ['#ff571c', '#7f2b0e', '#4c1908', '#ff884d', '#a34b28', '#331309']
     
     if opcao_selecionada == "Visão Geral":
@@ -317,7 +317,7 @@ def dashboard():
             with tab1:
 
                 with st.container(border=True):
-                    st.subheader("Produtividade Diária - Geral")
+                    st.subheader("Produtividade Diária - Total das Tarefas Finalizadas")
                     fig_produtividade = plot_produtividade_diaria(df_produtividade, custom_colors)
                     if fig_produtividade:
                         st.plotly_chart(fig_produtividade)
@@ -382,7 +382,6 @@ def dashboard():
             
             # Exibir a tabela de ranking
             st.dataframe(styled_df_ranking, width=2000)
-            
         
         with st.expander("Exportar Dados"):
             try:    
@@ -423,7 +422,7 @@ def dashboard():
             except Exception as e:
                 st.warning("Ocorreu um erro inesperado. Por favor, tente novamente. Detalhes do erro:")
                 st.code(str(e))
-            
+        
     elif opcao_selecionada == "Métricas Individuais":
         st.title("Métricas Individuais")
         
@@ -483,13 +482,13 @@ def dashboard():
         
         if tmo_cadastrado_analista is not None and tmo_equipe_cadastro is not None:
             if tmo_cadastrado_analista > tmo_equipe_cadastro:
-                st.toast(f"O TMO de Cadastro de {analista_selecionado} ({format_timedelta(tempo_medio_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe_cadastro)}).", icon=":material/warning:")
+                st.toast(f"O TMO de Cadastro de {analista_selecionado} ({format_timedelta(tmo_cadastrado_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe_cadastro)}).", icon=":material/warning:")
             else:
                 pass
         
         if tmo_atualizado_analista is not None and tmo_equipe_cadastro is not None:
             if tmo_atualizado_analista > tmo_equipe_atualizacao:
-                st.toast(f"O TMO de Atualização de {analista_selecionado} ({format_timedelta(tempo_medio_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe_atualizacao)}).", icon=":material/warning:")
+                st.toast(f"O TMO de Atualização de {analista_selecionado} ({format_timedelta(tmo_atualizado_analista)}) excede o tempo médio da equipe ({format_timedelta(tmo_equipe_atualizacao)}).", icon=":material/warning:")
             else:
                 pass     
 
@@ -563,6 +562,73 @@ def dashboard():
                     custom_colors=custom_colors,
                     st=st
                 )
+                
+    elif opcao_selecionada == "Diário de Bordo":
+        st.header("Análise de SLA")
+
+        # Upload de arquivo SLA
+        uploaded_file = st.file_uploader("Faça o upload do arquivo SLA", type=["xlsx"])
+
+        if uploaded_file:
+            usuario = st.session_state.usuario_logado
+            sla_data = load_sla_data(usuario)
+
+            # Ler o novo arquivo
+            novo_sla_data = pd.read_excel(uploaded_file)
+
+            # Salvar os dados, verificando duplicatas
+            linhas_nao_salvas = save_sla_data(novo_sla_data, usuario)
+
+            if linhas_nao_salvas > 0:
+                st.warning(f"{linhas_nao_salvas} linhas não foram salvas porque já existem no banco de dados.")
+            else:
+                st.success("Todos os dados foram carregados com sucesso!")
+
+            # Atualizar e exibir os dados
+            sla_data = load_sla_data(usuario)
+            st.dataframe(sla_data, use_container_width=True, hide_index=True)
+
+        # Filtro de data para análise de SLA
+        sla_data = load_sla_data(st.session_state.usuario_logado)
+        sla_data['DATA CRIAÇÃO PROTOCOLO'] = pd.to_datetime(sla_data['DATA CRIAÇÃO PROTOCOLO'], errors='coerce')
+        sla_data['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(sla_data['DATA DE CONCLUSÃO DA TAREFA'], errors='coerce')
+
+        st.subheader("Filtro de Data")
+        col1, col2 = st.columns(2)
+        with col1:
+            data_inicio = st.date_input("Data de início", sla_data['DATA CRIAÇÃO PROTOCOLO'].min().date())
+        with col2:
+            data_fim = st.date_input("Data de fim", sla_data['DATA CRIAÇÃO PROTOCOLO'].max().date())
+
+        if data_inicio > data_fim:
+            st.error("A data de início não pode ser posterior à data de fim!")
+        else:
+            # Filtrar dados com base no intervalo de datas
+            sla_filtrado = sla_data[
+                (sla_data['DATA CRIAÇÃO PROTOCOLO'].dt.date >= data_inicio) &
+                (sla_data['DATA CRIAÇÃO PROTOCOLO'].dt.date <= data_fim)
+            ]
+
+            # Calcular SLA geral
+            resultado, sla_geral = calcular_sla_por_fila(sla_filtrado, data_inicio, data_fim)
+
+            # Exibir SLA Geral
+            st.metric(label="SLA Geral", value=f"{sla_geral}%", help="SLA de todas as filas dentro do intervalo de D+3")
+
+            # Exibir métricas por fila
+            for _, row in resultado.iterrows():
+                if row['FILA'] != 'TOTAL':
+                    st.metric(
+                        label=row['FILA'],
+                        value=f"{row['% SLA']}%",
+                        delta=f"Entradas: {row['ENTRADAS']} | Tratados: {row['TRATADOS']}",
+                        delta_color="off",
+                        help=f"SLA da fila '{row['FILA']}' dentro do intervalo selecionado"
+                    )
+
+            # Botão para exportar planilha formatada
+            if st.button("Exportar Planilha de SLA"):
+                gerar_planilha_sla(sla_filtrado)
 
     if st.sidebar.button("Logout", icon=":material/logout:"):
         st.session_state.logado = False

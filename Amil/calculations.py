@@ -4,6 +4,7 @@ import plotly.express as px
 import math
 import streamlit as st
 from io import BytesIO
+from datetime import datetime
 from datetime import timedelta
 
 def load_data(usuario):
@@ -131,6 +132,14 @@ def format_timedelta(td):
     minutes, seconds = divmod(total_seconds, 60)
     return f"{minutes} min {seconds}s"
 
+def format_timedelta_grafico_tmo(td):
+    if pd.isnull(td):
+        return "00:00:00"
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
 # Função para calcular o TMO por analista
 def calcular_tmo_por_dia(df):
     df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
@@ -187,15 +196,15 @@ def calcular_tmo(df):
 
     # Agrupando por analista
     df_tmo_analista = df_finalizados.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
-        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),  # Soma total do tempo por analista
-        Total_Tarefas=('SITUAÇÃO DA TAREFA', 'count')  # Total de tarefas finalizadas ou canceladas por analista
+        Tempo_Total=('TEMPO MÉDIO OPERACIONAL', lambda x: x[df_finalizados['FINALIZAÇÃO'] == 'CADASTRADO'].sum()),  # Soma total do tempo das tarefas com finalização CADASTRADO
+        Total_Tarefas=('FINALIZAÇÃO', lambda x: x[x == 'CADASTRADO'].count())  # Total de tarefas finalizadas ou canceladas por analista
     ).reset_index()
 
     # Calcula o TMO (Tempo Médio Operacional) como média
     df_tmo_analista['TMO'] = df_tmo_analista['Tempo_Total'] / df_tmo_analista['Total_Tarefas']
 
     # Formata o tempo médio no formato de minutos e segundos
-    df_tmo_analista['TMO_Formatado'] = df_tmo_analista['TMO'].apply(format_timedelta)
+    df_tmo_analista['TMO_Formatado'] = df_tmo_analista['TMO'].apply(format_timedelta_grafico_tmo)
 
     return df_tmo_analista[['USUÁRIO QUE CONCLUIU A TAREFA', 'TMO_Formatado', 'TMO']]
 
@@ -867,4 +876,326 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
+# FILAS - INCIDENTE, CADASTRO ROBO E CADASTRO ANS - CONTAGEM DA QUANTIDADE DE TAREFAS QEU ENTRARAM POR DIA (PANDAS)
+# CRIAÇÃO DO PROTOCOLO -> .cont()
+# finalização NA - TIRAR A SIUTAÇÃO COMO CANCELADA E VERIFICAR DESTINO DA TAREFA
+
+# Lista de colunas essenciais
+COLUNAS_ESSENCIAIS = [
+    'DATA CRIAÇÃO PROTOCOLO',
+    'DATA CRIAÇÃO DA TAREFA',
+    'DATA DE INÍCIO DA TAREFA',
+    'DATA DE CONCLUSÃO DA TAREFA',
+    'TEMPO MÉDIO OPERACIONAL',
+    'NÚMERO DO PROTOCOLO',
+    'CLASSIFICAÇÃO',
+    'FILA',
+    'ID TAREFA',
+    'TAREFA',
+    'SITUAÇÃO DA TAREFA',
+    'USUÁRIO QUE CONCLUIU A TAREFA',
+    'ID FINALIZAÇÃO',
+    'FINALIZAÇÃO'
+]
+
+def load_sla_data(usuario):
+    """
+    Carrega ou cria a planilha de SLA para o usuário especificado.
+    
+    Parâmetros:
+        - usuario: Nome do usuário para identificar o arquivo de SLA.
+        
+    Retorna:
+        - Um DataFrame com os dados de SLA.
+    """
+    sla_file = f'sla_amil_{usuario}.xlsx'  # Nome do arquivo de SLA
+    try:
+        if os.path.exists(sla_file):
+            df_sla = pd.read_excel(sla_file)
+
+            # Adiciona colunas ausentes no arquivo existente
+            for coluna in COLUNAS_ESSENCIAIS:
+                if coluna not in df_sla.columns:
+                    df_sla[coluna] = None
+        else:
+            raise FileNotFoundError
+        
+    except (FileNotFoundError, ValueError, OSError):
+        # Cria um DataFrame vazio com as colunas essenciais e salva um novo arquivo
+        df_sla = pd.DataFrame(columns=COLUNAS_ESSENCIAIS)
+        df_sla.to_excel(sla_file, index=False)
+    
+    return df_sla
+
+def save_sla_data(df, usuario):
+    """
+    Salva o DataFrame de SLA no arquivo correspondente ao usuário,
+    verificando e evitando duplicatas.
+
+    Parâmetros:
+        - df: DataFrame com os dados de SLA.
+        - usuario: Nome do usuário para identificar o arquivo de SLA.
+    """
+    sla_file = f'sla_amil_{usuario}.xlsx'  # Nome do arquivo de SLA
+
+    # Carregar os dados existentes
+    if os.path.exists(sla_file):
+        existing_data = pd.read_excel(sla_file)
+    else:
+        existing_data = pd.DataFrame(columns=COLUNAS_ESSENCIAIS)
+
+    # Adicionar colunas ausentes antes de salvar
+    for coluna in COLUNAS_ESSENCIAIS:
+        if coluna not in df.columns:
+            df[coluna] = None
+        if coluna not in existing_data.columns:
+            existing_data[coluna] = None
+
+    # Combinar os novos dados com os existentes, evitando duplicatas
+    combined_data = pd.concat([existing_data, df]).drop_duplicates(subset=COLUNAS_ESSENCIAIS, keep='first')
+
+    # Contar o número de linhas que não foram adicionadas
+    linhas_nao_salvas = len(existing_data) + len(df) - len(combined_data)
+
+    # Salvar o DataFrame combinado no arquivo Excel
+    combined_data.to_excel(sla_file, index=False)
+
+    return linhas_nao_salvas
+
+def calcular_entrada_protocolos_por_dia(df):
+    """
+    Calcula a entrada de protocolos por dia para filas específicas e formata o resultado.
+
+    Parâmetros:
+        - df: DataFrame com os dados de SLA.
+
+    Retorna:
+        - Um DataFrame formatado no estilo hierárquico.
+    """
+    # Filtrar filas e tarefas específicas
+    filas_interessadas = ['CADASTRO ROBÔ', 'INCIDENTE PROCESSUAL', 'CADASTRO ANS']
+    tarefas_interessadas = ['ATUALIZAR', 'CADASTRAR ROBO', 'CADASTRAR ANS']
+
+    df_filtrado = df[
+        (df['FILA'].isin(filas_interessadas)) &
+        (df['TAREFA'].isin(tarefas_interessadas))
+    ]
+
+    # Garantir que a coluna 'DATA CRIAÇÃO PROTOCOLO' esteja no formato datetime
+    df_filtrado['DATA CRIAÇÃO PROTOCOLO'] = pd.to_datetime(df_filtrado['DATA CRIAÇÃO PROTOCOLO'], errors='coerce')
+
+    # Agrupar por fila e data (apenas dia)
+    df_agrupado = df_filtrado.groupby([
+        'DATA CRIAÇÃO PROTOCOLO',
+        'FILA'
+    ]).size().reset_index(name='Contagem de Protocolos')
+
+    # Renomear e formatar a data
+    df_agrupado = df_agrupado.rename(columns={'DATA CRIAÇÃO PROTOCOLO': 'Data', 'FILA': 'Fila'})
+    df_agrupado['Data'] = df_agrupado['Data'].dt.strftime('%d/%m/%Y')
+
+    # Agrupar por Data para calcular o total diário
+    totais_diarios = df_agrupado.groupby('Data')['Contagem de Protocolos'].sum().reset_index()
+    totais_diarios = totais_diarios.rename(columns={'Contagem de Protocolos': 'Total Diário'})
+
+    # Adicionar os totais diários ao DataFrame
+    df_formatado = pd.concat([totais_diarios, df_agrupado], ignore_index=True).sort_values(by='Data')
+
+    # Organizar o DataFrame para o formato hierárquico
+    final_data = []
+    for data in df_formatado['Data'].unique():
+        daily_total = totais_diarios[totais_diarios['Data'] == data]['Total Diário'].values[0]
+        final_data.append({'Data': data, 'Fila': '', 'Contagem de Protocolos': daily_total})
+        filas_do_dia = df_agrupado[df_agrupado['Data'] == data]
+        for _, row in filas_do_dia.iterrows():
+            final_data.append({'Data': '', 'Fila': row['Fila'], 'Contagem de Protocolos': row['Contagem de Protocolos']})
+
+    df_final_formatado = pd.DataFrame(final_data)
+
+    return df_final_formatado
+
+def calcular_entrada_por_dia_e_fila(df):
+    """
+    Calcula a entrada de protocolos por dia e por fila no formato hierárquico.
+    """
+
+    # Filtrar apenas as filas e tarefas desejadas
+    filas_interessadas = ["CADASTRO ROBÔ", "INCIDENTE PROCESSUAL", "CADASTRO ANS"]
+    tarefas_interessadas = ["ATUALIZAR", "CADASTRAR ROBO", "CADASTRAR ANS"]
+
+    df_filtrado = df[
+        (df["FILA"].isin(filas_interessadas)) &
+        (df["FINALIZAÇÃO"].isin(tarefas_interessadas))
+    ]
+
+    # Garantir que as datas estão no formato correto
+    df_filtrado['DATA CRIAÇÃO PROTOCOLO'] = pd.to_datetime(df_filtrado['DATA CRIAÇÃO PROTOCOLO'], errors='coerce')
+    df_filtrado = df_filtrado.dropna(subset=['DATA CRIAÇÃO PROTOCOLO'])  # Remover linhas com datas inválidas
+
+    # Agrupar por data e fila e contar os protocolos criados
+    df_entrada = (
+        df_filtrado.groupby(['DATA CRIAÇÃO PROTOCOLO', 'FILA'])
+        .size()
+        .reset_index(name='Quantidade')
+    )
+
+    # Adicionar uma coluna para totalizar por dia
+    df_totais = (
+        df_entrada.groupby('DATA CRIAÇÃO PROTOCOLO')['Quantidade']
+        .sum()
+        .reset_index()
+        .rename(columns={'Quantidade': 'Total'})
+    )
+
+    # Mesclar os dados para exibir no formato desejado
+    df_entrada_formatado = df_entrada.merge(df_totais, on='DATA CRIAÇÃO PROTOCOLO', how='left')
+
+    # Ordenar por data
+    df_entrada_formatado = df_entrada_formatado.sort_values(by=['DATA CRIAÇÃO PROTOCOLO', 'FILA'])
+
+    # Formatar a data como DD/MM/AAAA
+    df_entrada_formatado['DATA CRIAÇÃO PROTOCOLO'] = df_entrada_formatado['DATA CRIAÇÃO PROTOCOLO'].dt.strftime('%d/%m/%Y')
+
+    return df_entrada_formatado
+
+
+# Exibindo no Streamlit
+def exibir_entrada_por_dia(df_entrada_formatado):
+    """
+    Exibe os dados hierarquicamente no estilo solicitado no Streamlit.
+    """
+
+    if df_entrada_formatado.empty:
+        st.write("Não há dados para exibir.")
+        return
+
+    dias_unicos = df_entrada_formatado['DATA CRIAÇÃO PROTOCOLO'].unique()
+
+    for dia in dias_unicos:
+        st.write(f"**{dia}**")  # Exibe a data em negrito
+        df_dia = df_entrada_formatado[df_entrada_formatado['DATA CRIAÇÃO PROTOCOLO'] == dia]
+        
+        for _, row in df_dia.iterrows():
+            st.write(f"- {row['FILA']}: {row['Quantidade']}")
+        
+        total = df_dia['Total'].iloc[0]  # O total é o mesmo para todas as linhas do mesmo dia
+        st.write(f"**Total: {total}**")
+
+
+def gerar_planilha_sla(df):
+    """
+    Gera uma planilha Excel com abas separadas por dia, contendo as filas, entrada e quantidade tratada de protocolos.
+
+    Parâmetros:
+        - df: DataFrame com os dados de SLA.
+
+    Retorna:
+        - Um botão de download para a planilha gerada.
+    """
+
+    # Filtrar filas e tarefas específicas
+    filas_interessadas = [' CADASTRO ROBÔ', 'INCIDENTE PROCESSUAL', 'CADASTRO ANS']
+
+    # Garantir que as colunas de data estão no formato datetime
+    df['DATA CRIAÇÃO PROTOCOLO'] = pd.to_datetime(df['DATA CRIAÇÃO PROTOCOLO'], errors='coerce')
+    df['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA'], errors='coerce')
+
+    # Criar um arquivo Excel em memória
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        for dia, df_dia in df.groupby(df['DATA CRIAÇÃO PROTOCOLO'].dt.date):
+            # Filtrar apenas as filas relevantes para o dia
+            df_dia = df_dia[df_dia['FILA'].isin(filas_interessadas)]
+            
+            # Calcular entradas e tratados por fila
+            entradas = df_dia.groupby('FILA').size().reset_index(name='ENTRADA')
+            tratados = df_dia[df_dia['DATA DE CONCLUSÃO DA TAREFA'].notnull()].groupby('FILA').size().reset_index(name='TRATADOS')
+
+            # Mesclar entradas e tratados
+            resultado = pd.merge(entradas, tratados, on='FILA', how='outer').fillna(0)
+            resultado['ENTRADA'] = resultado['ENTRADA'].astype(int)
+            resultado['TRATADOS'] = resultado['TRATADOS'].astype(int)
+
+            # Adicionar total e SLA
+            total_entradas = resultado['ENTRADA'].sum()
+            total_tratados = resultado['TRATADOS'].sum()
+            sla = f"{(total_tratados / total_entradas) * 100:.2f}%" if total_entradas > 0 else "0%"
+
+            # Adicionar as linhas de total e SLA
+            resultado = pd.concat([
+                resultado,
+                pd.DataFrame({'FILA': ['TOTAL DE ENTRADAS', 'SLA'], 'ENTRADA': [total_entradas, None], 'TRATADOS': [total_tratados, sla]})
+            ], ignore_index=True)
+
+            # Escrever no Excel
+            resultado.to_excel(writer, index=False, sheet_name=dia.strftime('%d-%m-%Y'))
+
+            # Formatar o Excel
+            worksheet = writer.sheets[dia.strftime('%d-%m-%Y')]
+            worksheet.set_column('A:A', 20)  # Largura da coluna FILA
+            worksheet.set_column('B:B', 10)  # Largura da coluna ENTRADA
+            worksheet.set_column('C:C', 10)  # Largura da coluna TRATADOS
+
+    buffer.seek(0)
+
+    # Botão de download
+    st.download_button(
+        label="Baixar Planilha SLA",
+        data=buffer,
+        file_name=f"SLA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+def calcular_sla_por_fila(df, data_inicio, data_fim):
+    """
+    Calcula o SLA por fila, considerando o intervalo de datas no formato DD/MM/AAAA.
+    
+    Parâmetros:
+        - df: DataFrame contendo os dados de SLA.
+        - data_inicio: Data de início do filtro (formato DD/MM/AAAA).
+        - data_fim: Data de fim do filtro (formato DD/MM/AAAA).
+    
+    Retorna:
+        - resumo: DataFrame com as informações de SLA por fila.
+        - sla_geral: Percentual de SLA geral (todas as filas).
+    """
+    filas = [' CADASTRO ROBÔ', 'INCIDENTE PROCESSUAL', 'CADASTRO ANS']
+    tarefas_interesse = ['CADASTRAR ROBO', 'CADASTRAR ANS', 'ATUALIZAR']
+    prazo_sla = 3  # SLA de D+3
+
+    # Garantir que as colunas de data sejam convertidas corretamente
+    df['DATA CRIAÇÃO PROTOCOLO'] = pd.to_datetime(df['DATA CRIAÇÃO PROTOCOLO'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+    df['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+
+    # Filtrar pelo intervalo de datas no formato correto
+    df = df[
+        (df['DATA CRIAÇÃO PROTOCOLO'] >= pd.to_datetime(data_inicio, dayfirst=True)) & 
+        (df['DATA CRIAÇÃO PROTOCOLO'] <= pd.to_datetime(data_fim, dayfirst=True))
+    ]
+
+    # Filtrar apenas as filas de interesse
+    df = df[df['FILA'].isin(filas)]
+
+    # Filtrar apenas as tarefas de interesse
+    df = df[df['TAREFA'].isin(tarefas_interesse)]
+
+    # Calcular se o SLA foi cumprido (D+3)
+    df['SLA_OK'] = (
+        (df['DATA DE CONCLUSÃO DA TAREFA'] - df['DATA CRIAÇÃO PROTOCOLO']).dt.days <= prazo_sla
+    )
+
+    # Agrupar por fila e calcular as métricas
+    resumo = df.groupby('FILA').agg(
+        ENTRADAS=('DATA CRIAÇÃO PROTOCOLO', 'count'),
+        TRATADOS=('DATA DE CONCLUSÃO DA TAREFA', 'count'),
+        SLA_OK=('SLA_OK', 'sum')
+    ).reset_index()
+
+    # Calcular o percentual de SLA para cada fila
+    resumo['% SLA'] = ((resumo['SLA_OK'] / resumo['ENTRADAS']) * 100).round(2)
+
+    # Calcular o SLA geral
+    sla_geral = (resumo['SLA_OK'].sum() / resumo['ENTRADAS'].sum() * 100).round(2)
+
+    return resumo, sla_geral
 
