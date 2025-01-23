@@ -820,7 +820,7 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
         elif tmo_tipo == 'CADASTRADO':
             # Considerar apenas as finalizações "CADASTRADO"
             df_relevante = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
-        elif tmo_tipo == 'CADASTRADO_DETALHADO':
+        elif tmo_tipo == 'CADASTRADO DETALHADO':
             # Considerar apenas as finalizações "CADASTRADO" e detalhar por "TP CAUSA (TP COMPLEMENTO)"
             df_relevante = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
             causa_detalhes = df_relevante.groupby('TP CAUSA (TP COMPLEMENTO)').size().reset_index(name='Quantidade')
@@ -863,7 +863,7 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
         df_resumo.to_excel(writer, index=False, sheet_name='Resumo')
 
         # Se for CADASTRADO_DETALHADO, incluir os tipos de causa
-        if tmo_tipo == 'CADASTRADO_DETALHADO' and tipos_causa:
+        if tmo_tipo == 'CADASTRADO DETALHADO' and tipos_causa:
             for i, causa_detalhes in enumerate(tipos_causa):
                 causa_detalhes.to_excel(writer, index=False, sheet_name=f'Tipos_{analistas[i]}')
 
