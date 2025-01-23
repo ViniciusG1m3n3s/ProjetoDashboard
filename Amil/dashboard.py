@@ -406,11 +406,16 @@ def dashboard():
                 # Seleção do tipo de TMO
                 tmo_tipo = st.radio(
                     "Selecione o tipo de TMO para exportação:",
-                    options=['GERAL', 'CADASTRADO'],
+                    options=['GERAL', 'CADASTRADO', 'CADASTRADO DETALHADO'],
                     index=0,
-                    help="Escolha 'GERAL' para considerar todas as tarefas ou 'CADASTRADO' para considerar apenas finalizações de CADASTRO."
+                    help=(
+                        "Escolha 'GERAL' para considerar todas as tarefas, "
+                        "'CADASTRADO' para considerar apenas finalizações de CADASTRO, "
+                        "ou 'CADASTRADO_DETALHADO' para incluir detalhes dos tipos de 'TP CAUSA (TP COMPLEMENTO)'."
+                    )
                 )
 
+                # Botão para exportar a planilha
                 if st.button("Exportar Planilha"):
                     periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
                     exportar_planilha_com_tmo(df_total, periodo_selecionado, analistas_selecionados, tmo_tipo)

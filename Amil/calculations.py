@@ -663,13 +663,27 @@ def export_dataframe(df):
         st.warning("Selecione pelo menos uma coluna para exportar.")
         
 def calcular_melhor_tmo_por_dia(df_analista):
-    # Calcula o TMO por dia
-    df_tmo_por_dia = calcular_tmo_por_dia(df_analista)
-    
+    """
+    Calcula o melhor TMO de cadastro por dia para o analista.
+
+    Parâmetros:
+        - df_analista: DataFrame filtrado para o analista.
+
+    Retorna:
+        - O dia com o melhor TMO de cadastro e o valor do TMO.
+    """
+    # Filtrar apenas as finalizações do tipo 'CADASTRADO'
+    df_cadastro = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+
+    # Calcula o TMO por dia para o tipo 'CADASTRADO'
+    df_tmo_por_dia = calcular_tmo_por_dia(df_cadastro)
+
     # Identifica o dia com o menor TMO
     if not df_tmo_por_dia.empty:
         melhor_dia = df_tmo_por_dia.loc[df_tmo_por_dia['TMO'].idxmin()]
         return melhor_dia['Dia'], melhor_dia['TMO']
+
+    # Retorna None caso não haja dados para 'CADASTRADO'
     return None, None
 
 def calcular_melhor_dia_por_cadastro(df_analista):
@@ -775,14 +789,14 @@ def calcular_tmo_personalizado(df):
 
 def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, tmo_tipo='GERAL'):
     """
-    Exporta uma planilha com informações do período selecionado, analistas, TMO (geral ou cadastrado) e quantidade de tarefas,
+    Exporta uma planilha com informações do período selecionado, analistas, TMO (geral, cadastrado ou cadastrado com tipo) e quantidade de tarefas,
     adicionando formatação condicional baseada na média do TMO.
 
     Parâmetros:
         - df: DataFrame com os dados.
         - periodo_selecionado: Tuple contendo a data inicial e final.
         - analistas_selecionados: Lista de analistas selecionados.
-        - tmo_tipo: Tipo de TMO a ser usado ('GERAL' ou 'CADASTRADO').
+        - tmo_tipo: Tipo de TMO a ser usado ('GERAL', 'CADASTRADO', 'CADASTRADO DETALHADO').
     """
     # Filtrar o DataFrame com base no período e analistas selecionados
     data_inicial, data_final = periodo_selecionado
@@ -796,6 +810,7 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
     analistas = []
     tmos = []
     quantidades = []
+    tipos_causa = []  # Para armazenar os tipos de "TP CAUSA (TP COMPLEMENTO)"
 
     for analista in analistas_selecionados:
         df_analista = df_filtrado[df_filtrado['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]
@@ -805,6 +820,11 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
         elif tmo_tipo == 'CADASTRADO':
             # Considerar apenas as finalizações "CADASTRADO"
             df_relevante = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+        elif tmo_tipo == 'CADASTRADO_DETALHADO':
+            # Considerar apenas as finalizações "CADASTRADO" e detalhar por "TP CAUSA (TP COMPLEMENTO)"
+            df_relevante = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+            causa_detalhes = df_relevante.groupby('TP CAUSA (TP COMPLEMENTO)').size().reset_index(name='Quantidade')
+            tipos_causa.append(causa_detalhes)
         else:
             st.error("Tipo de TMO inválido selecionado.")
             return
@@ -839,8 +859,13 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
     # Criar um arquivo Excel em memória
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        # Exportar os dados
+        # Exportar os dados do resumo
         df_resumo.to_excel(writer, index=False, sheet_name='Resumo')
+
+        # Se for CADASTRADO_DETALHADO, incluir os tipos de causa
+        if tmo_tipo == 'CADASTRADO_DETALHADO' and tipos_causa:
+            for i, causa_detalhes in enumerate(tipos_causa):
+                causa_detalhes.to_excel(writer, index=False, sheet_name=f'Tipos_{analistas[i]}')
 
         # Acessar o workbook e worksheet para aplicar formatação condicional
         workbook = writer.book
