@@ -406,7 +406,7 @@ def dashboard():
                 # Seleção do tipo de TMO
                 tmo_tipo = st.radio(
                     "Selecione o tipo de TMO para exportação:",
-                    options=['GERAL', 'CADASTRADO', 'CADASTRADO DETALHADO'],
+                    options=['GERAL', 'CADASTRADO', 'CADASTRADO_DETALHADO'],
                     index=0,
                     help=(
                         "Escolha 'GERAL' para considerar todas as tarefas, "
