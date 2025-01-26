@@ -197,6 +197,53 @@ def grafico_status_analista(total_parcial_analista, total_fora_analista, total_c
 
 import plotly.express as px
 
+def exibir_grafico_tp_causa(df_analista, analista_selecionado, custom_colors, st):
+    """
+    Gera e exibe um gráfico de pizza com as quantidades de tarefas cadastradas por "TP CAUSA (TP COMPLEMENTO)"
+    para um analista específico.
+
+    Parâmetros:
+        - df_analista: DataFrame contendo os dados de análise.
+        - analista_selecionado: Nome do analista selecionado.
+        - custom_colors: Lista de cores personalizadas para o gráfico.
+        - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
+    """
+    if 'TP CAUSA (TP COMPLEMENTO)' in df_analista.columns:
+        # Filtrar apenas as tarefas cadastradas
+        df_cadastradas = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+
+        # Contar a quantidade de tarefas por "TP CAUSA (TP COMPLEMENTO)"
+        tp_causa_counts = df_cadastradas['TP CAUSA (TP COMPLEMENTO)'].dropna().value_counts().reset_index()
+        tp_causa_counts.columns = ['TP Causa', 'Quantidade']
+
+        # Criar o gráfico de pizza
+        fig_tp_causa = px.pie(
+            names=tp_causa_counts['TP Causa'],
+            values=tp_causa_counts['Quantidade'],
+            color_discrete_sequence=custom_colors
+        )
+
+        # Personalizar o hover e layout do gráfico
+        fig_tp_causa.update_traces(
+            hovertemplate='Causa %{label} = %{value}<extra></extra>',
+        )
+
+        fig_tp_causa.update_layout(
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.1,
+                xanchor="center",
+                x=0.5
+            )
+        )
+
+        # Exibir o gráfico na dashboard
+        st.plotly_chart(fig_tp_causa, use_container_width=True)
+    else:
+        st.write("A coluna 'TP CAUSA (TP COMPLEMENTO)' não foi encontrada no dataframe.")
+
+
 def exibir_grafico_filas_realizadas(df_analista, analista_selecionado, custom_colors, st):
     """
     Gera e exibe um gráfico de pizza com as filas realizadas por um analista específico.

@@ -902,6 +902,88 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
+def exportar_relatorio_detalhado_por_analista(df, periodo_selecionado, analistas_selecionados):
+    """
+    Exporta um relatório detalhado por analista, com TMO de CADASTRADO e quantidade por dia, gerando uma aba para cada analista.
+
+    Parâmetros:
+        - df: DataFrame com os dados.
+        - periodo_selecionado: Tuple contendo a data inicial e final.
+        - analistas_selecionados: Lista de analistas selecionados.
+    """
+    data_inicial, data_final = periodo_selecionado
+
+    # Filtrar o DataFrame pelo período e analistas selecionados
+    df_filtrado = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicial) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_final) &
+        (df['USUÁRIO QUE CONCLUIU A TAREFA'].isin(analistas_selecionados)) &
+        (df['FINALIZAÇÃO'] == 'CADASTRADO')  # Apenas tarefas cadastradas
+    ]
+
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        # Criar relatório detalhado por analista
+        for analista in analistas_selecionados:
+            df_analista = df_filtrado[df_filtrado['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]
+            
+            # Calcular TMO e quantidade por dia
+            df_tmo_por_dia = df_analista.groupby(df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.date).agg(
+                TMO=('TEMPO MÉDIO OPERACIONAL', lambda x: x.sum() / len(x) if len(x) > 0 else pd.Timedelta(0)),
+                Quantidade=('DATA DE CONCLUSÃO DA TAREFA', 'count')
+            ).reset_index()
+            df_tmo_por_dia.rename(columns={'DATA DE CONCLUSÃO DA TAREFA': 'Dia'}, inplace=True)
+
+            # Formatar TMO como HH:MM:SS
+            df_tmo_por_dia['TMO'] = df_tmo_por_dia['TMO'].apply(
+                lambda x: f"{int(x.total_seconds() // 3600):02}:{int((x.total_seconds() % 3600) // 60):02}:{int(x.total_seconds() % 60):02}"
+            )
+
+            # Adicionar coluna de analista
+            df_tmo_por_dia.insert(0, 'Analista', analista)
+
+            # Reordenar colunas para "ANALISTA, TMO, QUANTIDADE, DIA"
+            df_tmo_por_dia = df_tmo_por_dia[['Analista', 'TMO', 'Quantidade', 'Dia']]
+
+            # Exportar os dados para uma aba do Excel
+            if not df_tmo_por_dia.empty:
+                df_tmo_por_dia.to_excel(writer, index=False, sheet_name=analista[:31])
+
+                # Acessar a aba para formatação condicional
+                workbook = writer.book
+                worksheet = writer.sheets[analista[:31]]
+
+                # Ajustar largura das colunas
+                worksheet.set_column('A:A', 20)  # Coluna 'Analista'
+                worksheet.set_column('B:B', 12)  # Coluna 'TMO'
+                worksheet.set_column('C:C', 12)  # Coluna 'Quantidade'
+                worksheet.set_column('D:D', 15)  # Coluna 'Dia'
+
+                # Criar formatos para formatação condicional
+                format_tmo_green = workbook.add_format({'bg_color': '#CCFFCC', 'font_color': '#006600'})  # Verde
+                format_tmo_yellow = workbook.add_format({'bg_color': '#FFFFCC', 'font_color': '#666600'})  # Amarelo
+                format_tmo_red = workbook.add_format({'bg_color': '#FFCCCC', 'font_color': '#FF0000'})  # Vermelho
+
+                # Aplicar formatação condicional com base no TMO
+                worksheet.conditional_format(
+                    'B2:B{}'.format(len(df_tmo_por_dia) + 1),
+                    {
+                        'type': 'formula',
+                        'criteria': f'=LEN(B2)>0',
+                        'format': format_tmo_yellow  # Formato padrão para demonstração
+                    }
+                )
+
+    buffer.seek(0)
+
+    # Oferecer download
+    st.download_button(
+        label="Baixar Relatório Detalhado por Analista (TMO CADASTRADO)",
+        data=buffer,
+        file_name="relatorio_tmo_detalhado_cadastrado_por_analista.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 # FILAS - INCIDENTE, CADASTRO ROBO E CADASTRO ANS - CONTAGEM DA QUANTIDADE DE TAREFAS QEU ENTRARAM POR DIA (PANDAS)
 # CRIAÇÃO DO PROTOCOLO -> .cont()
 # finalização NA - TIRAR A SIUTAÇÃO COMO CANCELADA E VERIFICAR DESTINO DA TAREFA

@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from .calculations import calcular_tmo_equipe_cadastro, load_sla_data, calcular_sla_por_fila, gerar_planilha_sla, calcular_entrada_protocolos_por_dia, calcular_entrada_por_dia_e_fila, exibir_entrada_por_dia, save_sla_data, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
-from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_tmo_por_dia_cadastro, plot_produtividade_diaria_cadastros, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
+from .calculations import calcular_tmo_equipe_cadastro, load_sla_data, calcular_sla_por_fila, gerar_planilha_sla, calcular_entrada_protocolos_por_dia, calcular_entrada_por_dia_e_fila, exibir_entrada_por_dia, save_sla_data, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista,exportar_relatorio_detalhado_por_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
+from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_tmo_por_dia_cadastro, exibir_grafico_tp_causa, plot_produtividade_diaria_cadastros, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
 from datetime import datetime
 from Amil.diario import diario
 
@@ -415,10 +415,15 @@ def dashboard():
                     )
                 )
 
-                # Botão para exportar a planilha
-                if st.button("Exportar Planilha"):
+                # Botão para exportar a planilha padrão
+                if st.button("Exportar Planilha Resumida"):
                     periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
                     exportar_planilha_com_tmo(df_total, periodo_selecionado, analistas_selecionados, tmo_tipo)
+
+                # Botão para exportar a planilha detalhada por analista
+                if st.button("Exportar Relatório Detalhado por Analista"):
+                    periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
+                    exportar_relatorio_detalhado_por_analista(df_total, periodo_selecionado, analistas_selecionados)
 
             except ValueError as e:
                 st.warning("Ocorreu um erro ao processar as datas. Verifique se as informações de data estão corretas no seu arquivo. Detalhes do erro:")
@@ -559,7 +564,9 @@ def dashboard():
                     st=st
             )
         
-        with st.container(border=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            with st.container(border=True):
                 st.subheader(f"Filas Realizadas")                    
                 exibir_grafico_filas_realizadas(
                     df_analista=df_analista,
@@ -567,6 +574,10 @@ def dashboard():
                     custom_colors=custom_colors,
                     st=st
                 )
+        with col2:
+            with st.container(border=True):
+                st.subheader(f"Tarefas Cadastradas por TP CAUSA")
+                exibir_grafico_tp_causa(df_analista, analista_selecionado, custom_colors, st)
                 
     elif opcao_selecionada == "Diário de Bordo":
         st.header("Análise de SLA")
