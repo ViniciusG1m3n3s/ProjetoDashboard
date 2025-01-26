@@ -394,7 +394,8 @@ def calcular_filas_analista(df_analista):
         return pd.DataFrame({'Fila': [], 'Finalizados': [], 'Reclassificados': [], 'Andamento': [], 'TMO Médio por Fila': []})
 
 def calcular_tmo_por_dia(df_analista):
-    # Lógica para calcular o TMO por dia
+    # Filtrar apenas as tarefas com finalização "CADASTRADO"
+    df_analista = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
     df_analista['Dia'] = df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.date
     tmo_por_dia = df_analista.groupby('Dia').agg(TMO=('TEMPO MÉDIO OPERACIONAL', 'mean')).reset_index()
     return tmo_por_dia
