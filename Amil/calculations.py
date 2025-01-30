@@ -4,7 +4,6 @@ import plotly.express as px
 import math
 import streamlit as st
 from io import BytesIO
-from datetime import datetime
 from datetime import timedelta
 
 def load_data(usuario):
