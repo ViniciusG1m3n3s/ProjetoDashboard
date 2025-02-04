@@ -900,6 +900,95 @@ def exportar_planilha_com_tmo(df, periodo_selecionado, analistas_selecionados, t
         file_name="resumo_analistas_formatado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+    
+import pandas as pd
+import streamlit as st
+from io import BytesIO
+from datetime import timedelta
+
+def exportar_planilha_com_tmo_completo(df, periodo_selecionado, analistas_selecionados):
+    """
+    Exporta uma planilha com informações do período selecionado, incluindo:
+    - TMO de Cadastro
+    - Quantidade de Cadastro
+    - TMO de Atualizado
+    - Quantidade de Atualização
+    """
+
+    # Filtrar o DataFrame com base no período e analistas selecionados
+    data_inicial, data_final = periodo_selecionado
+    df_filtrado = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicial) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_final) &
+        (df['USUÁRIO QUE CONCLUIU A TAREFA'].isin(analistas_selecionados))
+    ]
+
+    # Criar listas para armazenar os dados por analista
+    analistas = []
+    tmo_cadastrado = []
+    quantidade_cadastrado = []
+    tmo_atualizado = []
+    quantidade_atualizado = []
+
+    for analista in analistas_selecionados:
+        df_analista = df_filtrado[df_filtrado['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]
+
+        # Cálculo para Cadastro
+        df_cadastro = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+        tmo_cadastro_analista = df_cadastro['TEMPO MÉDIO OPERACIONAL'].mean()
+        total_cadastro = len(df_cadastro)
+
+        # Cálculo para Atualizado
+        df_atualizado = df_analista[df_analista['FINALIZAÇÃO'] == 'ATUALIZADO']
+        tmo_atualizado_analista = df_atualizado['TEMPO MÉDIO OPERACIONAL'].mean()
+        total_atualizado = len(df_atualizado)
+
+        # Adicionar valores às listas
+        analistas.append(analista)
+        tmo_cadastrado.append(tmo_cadastro_analista)
+        quantidade_cadastrado.append(total_cadastro)
+        tmo_atualizado.append(tmo_atualizado_analista)
+        quantidade_atualizado.append(total_atualizado)
+
+    # Criar DataFrame de resumo
+    df_resumo = pd.DataFrame({
+        'Analista': analistas,
+        'TMO Cadastro': tmo_cadastrado,
+        'Quantidade Cadastro': quantidade_cadastrado,
+        'TMO Atualizado': tmo_atualizado,
+        'Quantidade Atualização': quantidade_atualizado
+    })
+
+    # Converter TMO para HH:MM:SS (removendo frações de segundos)
+    def format_tmo(tmo):
+        if pd.notnull(tmo):
+            total_seconds = int(tmo.total_seconds())  # Removendo frações
+            return str(timedelta(seconds=total_seconds))
+        return '00:00:00'
+
+    df_resumo['TMO Cadastro'] = df_resumo['TMO Cadastro'].apply(format_tmo)
+    df_resumo['TMO Atualizado'] = df_resumo['TMO Atualizado'].apply(format_tmo)
+
+    # Criar um arquivo Excel em memória
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        df_resumo.to_excel(writer, index=False, sheet_name='Resumo')
+
+        # Ajustes no Excel
+        workbook = writer.book
+        worksheet = writer.sheets['Resumo']
+        worksheet.set_column('A:A', 20)  # Coluna Analista
+        worksheet.set_column('B:E', 15)  # Colunas de TMO e Quantidade
+
+    buffer.seek(0)
+
+    # Oferecer download no Streamlit
+    st.download_button(
+        label="Baixar Planilha Completa de TMO",
+        data=buffer,
+        file_name="relatorio_tmo_completo.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 def exportar_relatorio_detalhado_por_analista(df, periodo_selecionado, analistas_selecionados):
     """
@@ -981,6 +1070,417 @@ def exportar_relatorio_detalhado_por_analista(df, periodo_selecionado, analistas
         data=buffer,
         file_name="relatorio_tmo_detalhado_cadastrado_por_analista.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+def calcular_tmo_geral(df):
+    """
+    Calcula o TMO Geral considerando todas as tarefas finalizadas.
+    """
+    df_finalizados = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'REALIZADO', 'ATUALIZADO'])]
+    return df_finalizados['TEMPO MÉDIO OPERACIONAL'].mean()
+
+def calcular_tmo_cadastro(df):
+    """
+    Calcula o TMO apenas para tarefas finalizadas como "CADASTRADO".
+    """
+    df_cadastro = df[df['FINALIZAÇÃO'] == 'CADASTRADO']
+    return df_cadastro['TEMPO MÉDIO OPERACIONAL'].mean()
+
+def calcular_tempo_ocioso(df):
+    """
+    Calcula o tempo ocioso total por analista.
+    """
+    df_ocioso = df.groupby('USUÁRIO QUE CONCLUIU A TAREFA')['TEMPO OCIOSO'].sum().reset_index()
+    return df_ocioso
+
+def gerar_relatorio_tmo_completo(df, periodo_selecionado, analistas_selecionados):
+    """
+    Gera um relatório Excel com TMO de Cadastro, TMO Geral, Quantidade de Cadastro,
+    Quantidade Total de Protocolos e Tempo Ocioso.
+    """
+    data_inicial, data_final = periodo_selecionado
+
+    # 🔹 Filtrar os dados pelo período e analistas selecionados
+    df_filtrado = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicial) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_final) &
+        (df['USUÁRIO QUE CONCLUIU A TAREFA'].isin(analistas_selecionados))
+    ].copy()  # Criar uma cópia para evitar alterações no DataFrame original
+
+    # 🔹 Calcular o tempo ocioso por analista
+    df_tempo_ocioso = calcular_tempo_ocioso_por_analista(df_filtrado)
+
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+        for analista in analistas_selecionados:
+            df_analista = df_filtrado[df_filtrado['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]
+            tmo_geral = calcular_tmo_geral(df_analista)
+            tmo_cadastro = calcular_tmo_cadastro(df_analista)
+            total_cadastros = len(df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO'])
+            total_protocolos = len(df_analista)
+
+            # 🔹 Ajuste para acessar a coluna correta do DataFrame `df_tempo_ocioso`
+            tempo_ocioso = df_tempo_ocioso[df_tempo_ocioso['USUÁRIO QUE CONCLUIU A TAREFA'] == analista]['TEMPO OCIOSO'].sum() if not df_tempo_ocioso.empty else pd.Timedelta(0)
+
+            # 🔹 Criar DataFrame com os dados do relatório
+            df_resumo = pd.DataFrame({
+                'Analista': [analista],
+                'TMO Geral': [tmo_geral],
+                'TMO Cadastro': [tmo_cadastro],
+                'Quantidade Cadastro': [total_cadastros],
+                'Quantidade Total': [total_protocolos],
+                'Tempo Ocioso': [tempo_ocioso]
+            })
+
+            # 🔹 Converter TMO e Tempo Ocioso para HH:MM:SS
+            df_resumo['TMO Geral'] = df_resumo['TMO Geral'].apply(lambda x: str(timedelta(seconds=x.total_seconds())) if pd.notnull(x) else '00:00:00')
+            df_resumo['TMO Cadastro'] = df_resumo['TMO Cadastro'].apply(lambda x: str(timedelta(seconds=x.total_seconds())) if pd.notnull(x) else '00:00:00')
+            df_resumo['Tempo Ocioso'] = df_resumo['Tempo Ocioso'].apply(lambda x: str(timedelta(seconds=x.total_seconds())) if pd.notnull(x) else '00:00:00')
+
+            # 🔹 Escrever no Excel
+            df_resumo.to_excel(writer, index=False, sheet_name=analista[:31])
+
+            # 🔹 Ajustes no Excel
+            workbook = writer.book
+            worksheet = writer.sheets[analista[:31]]
+            worksheet.set_column('A:A', 20)
+            worksheet.set_column('B:F', 15)
+
+    buffer.seek(0)
+
+    # 🔹 Botão de download no Streamlit
+    st.download_button(
+        label="📊 Baixar Relatório Completo de TMO",
+        data=buffer,
+        file_name="relatorio_tmo_completo.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+def gerar_relatorio_html(df, data_inicio_antes, data_fim_antes, data_inicio_depois, data_fim_depois, usuarios_selecionados):
+    """
+    Gera um relatório HTML comparando o TMO antes e depois da mudança.
+    """
+
+    # 🔹 Filtrar apenas os usuários selecionados e as tarefas finalizadas como 'CADASTRADO'
+    df = df[(df['USUÁRIO QUE CONCLUIU A TAREFA'].isin(usuarios_selecionados)) & (df['FINALIZAÇÃO'] == 'CADASTRADO')]
+
+    # 🔹 Filtrar pelo período antes e depois da mudança
+    df_antes = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicio_antes) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_fim_antes)
+    ]
+    df_depois = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicio_depois) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_fim_depois)
+    ]
+
+    # 🔹 Calcular TMO e quantidade de tarefas por analista
+    df_tmo_antes = df_antes.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
+        TMO=('TEMPO MÉDIO OPERACIONAL', lambda x: x.mean() if len(x) > 0 else pd.Timedelta(0)),
+        Quantidade=('DATA DE CONCLUSÃO DA TAREFA', 'count')
+    ).reset_index()
+
+    df_tmo_depois = df_depois.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
+        TMO=('TEMPO MÉDIO OPERACIONAL', lambda x: x.mean() if len(x) > 0 else pd.Timedelta(0)),
+        Quantidade=('DATA DE CONCLUSÃO DA TAREFA', 'count')
+    ).reset_index()
+
+    # 🔹 Unir os dois DataFrames para comparação
+    df_comparativo = pd.merge(df_tmo_antes, df_tmo_depois, on="USUÁRIO QUE CONCLUIU A TAREFA", how="outer", suffixes=("_antes", "_depois"))
+
+    # 🔹 Função para formatar TMO no formato HH:MM:SS
+    def format_tmo(value):
+        if pd.isnull(value) or value == pd.Timedelta(0):
+            return "00:00:00"
+        total_seconds = value.total_seconds()
+        return f"{int(total_seconds // 3600):02}:{int((total_seconds % 3600) // 60):02}:{int(total_seconds % 60):02}"
+
+    df_comparativo['TMO_antes'] = df_comparativo['TMO_antes'].apply(format_tmo)
+    df_comparativo['TMO_depois'] = df_comparativo['TMO_depois'].apply(format_tmo)
+
+    # 🔹 Criar os dados para o gráfico
+    nomes_analistas = df_comparativo['USUÁRIO QUE CONCLUIU A TAREFA'].tolist()
+    tmo_antes_legenda = df_comparativo['TMO_antes'].tolist()
+    tmo_depois_legenda = df_comparativo['TMO_depois'].tolist()
+    tmo_antes_numerico = [int(pd.to_timedelta(t).total_seconds() // 60) for t in tmo_antes_legenda]
+    tmo_depois_numerico = [int(pd.to_timedelta(t).total_seconds() // 60) for t in tmo_depois_legenda]
+
+    # 🔹 Criar a tabela HTML
+    tabela_html = ""
+    for _, row in df_comparativo.iterrows():
+        tabela_html += f"""
+        <tr>
+            <td>{row['USUÁRIO QUE CONCLUIU A TAREFA']}</td>
+            <td>{row['TMO_antes']}</td>
+            <td>{row['TMO_depois']}</td>
+        </tr>
+        """
+
+    # 🔹 Criar o HTML final
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Relatório de TMO</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }}
+            .container {{ max-width: 900px; background-color: white; padding: 20px; border-radius: 10px; margin: auto; }}
+            .header {{ text-align: center; padding-bottom: 20px; }}
+            .header h1 {{ color: #333; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            th, td {{ border: 1px solid #ddd; text-align: center; padding: 10px; }}
+            th {{ background-color: #FF5500; color: white; }}
+            .header img {{ width: 150px; margin: 10px auto;}}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <img src="https://finchsolucoes.com.br/img/fefdd9df-1bd3-4107-ab22-f06d392c1f55.png" alt="Finch Soluções">
+                <h1>Relatório de TMO</h1>
+                <h2>Comparação entre Períodos</h2>
+            </div>
+            <canvas id="tmoChart" width="400" height="200"></canvas>
+            <script>
+                Chart.register(ChartDataLabels);
+                var ctx = document.getElementById('tmoChart').getContext('2d');
+                var tmoChart = new Chart(ctx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: {nomes_analistas},
+                        datasets: [
+                            {{
+                                label: 'TMO Antes',
+                                data: {tmo_antes_numerico},
+                                backgroundColor: '#FF5500',
+                                borderRadius: 10
+                            }},
+                            {{
+                                label: 'TMO Depois',
+                                data: {tmo_depois_numerico},
+                                backgroundColor: '#330066',
+                                borderRadius: 10
+                            }}
+                        ]
+                    }},
+                    options: {{
+                        responsive: true,
+                        plugins: {{
+                            datalabels: {{
+                                anchor: 'end',
+                                align: 'top',
+                                color: '#000',
+                                font: {{
+                                    size: 10  // 🔹 Diminuindo o tamanho da fonte dos valores no topo
+                                }},
+                                formatter: function(value, context) {{
+                                    return context.dataset.label === 'TMO Antes' 
+                                        ? {tmo_antes_legenda}[context.dataIndex] 
+                                        : {tmo_depois_legenda}[context.dataIndex];
+                                }}
+                            }},
+                            tooltip: {{
+                                callbacks: {{
+                                    label: function(tooltipItem) {{
+                                        return tooltipItem.dataset.label + ': ' + {tmo_antes_legenda}[tooltipItem.dataIndex] 
+                                            + ' → ' + {tmo_depois_legenda}[tooltipItem.dataIndex];
+                                    }}
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            y: {{
+                                beginAtZero: true
+                            }}
+                        }}
+                    }}
+                }});
+            </script>
+            <table>
+                <tr>
+                    <th>Analista</th>
+                    <th>TMO Antes</th>
+                    <th>TMO Depois</th>
+                </tr>
+                {tabela_html}
+            </table>
+        </div>
+    </body>
+    </html>
+    """
+
+    return html_content
+
+# **🔹 Função para baixar o HTML**
+def download_html(df, data_inicio_antes, data_fim_antes, data_inicio_depois, data_fim_depois, usuarios_selecionados):
+    html_content = gerar_relatorio_html(df, data_inicio_antes, data_fim_antes, data_inicio_depois, data_fim_depois, usuarios_selecionados)
+    buffer = BytesIO()
+    buffer.write(html_content.encode("utf-8"))
+    buffer.seek(0)
+
+    st.download_button(
+        label="Baixar Relatório em HTML",
+        data=buffer,
+        file_name="relatorio_tmo.html",
+        mime="text/html"
+    )
+
+def gerar_relatorio_html_tmo(df, data_inicio, data_fim):
+    """
+    Gera um relatório HTML de TMO de Cadastro com um gráfico e tabela detalhada.
+
+    Parâmetros:
+        - df: DataFrame contendo os dados de TMO.
+        - data_inicio, data_fim: Período selecionado.
+    """
+
+    # Filtrar apenas cadastros e o período selecionado
+    df_filtrado = df[
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicio) &
+        (df['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_fim) &
+        (df['FINALIZAÇÃO'] == 'CADASTRADO')
+    ]
+
+    # Calcular TMO médio geral
+    tmo_medio_geral = df_filtrado['TEMPO MÉDIO OPERACIONAL'].mean()
+    
+    # Agrupar dados por analista
+    df_tmo_analista = df_filtrado.groupby('USUÁRIO QUE CONCLUIU A TAREFA').agg(
+        TMO=('TEMPO MÉDIO OPERACIONAL', lambda x: x.mean() if len(x) > 0 else pd.Timedelta(0)),
+        Quantidade=('DATA DE CONCLUSÃO DA TAREFA', 'count')
+    ).reset_index()
+
+    # Formatar TMO para exibição
+    df_tmo_analista['TMO'] = df_tmo_analista['TMO'].apply(
+        lambda x: f"{int(x.total_seconds() // 3600):02}:{int((x.total_seconds() % 3600) // 60):02}:{int(x.total_seconds() % 60):02}"
+    )
+
+    # Organizar os dados para gráfico
+    nomes_analistas = df_tmo_analista['USUÁRIO QUE CONCLUIU A TAREFA'].tolist()
+    tmo_valores = [int(pd.Timedelta(tmo).total_seconds() // 60) for tmo in df_tmo_analista['TMO']]  # Converter para minutos
+    tmo_labels = df_tmo_analista['TMO'].tolist()
+
+    # Criar a tabela HTML
+    tabela_html = ""
+    for _, row in df_tmo_analista.iterrows():
+        tabela_html += f"""
+        <tr>
+            <td>{row['USUÁRIO QUE CONCLUIU A TAREFA']}</td>
+            <td>{row['TMO']}</td>
+            <td>{row['Quantidade']}</td>
+            <td>{data_inicio.strftime('%B/%Y')}</td>
+        </tr>
+        """
+
+    # Criar o HTML final
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Relatório de Produtividade</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }}
+            .container {{ max-width: 1280px; background-color: white; padding: 20px; border-radius: 15px; margin: auto; }}
+            .header {{ text-align: center; padding-bottom: 20px; }}
+            .header h1 {{ color: #333; }}
+            .highlight {{ background-color: #FF5500; color: white; padding: 10px; text-align: center; border-radius: 10px; font-size: 16px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+            table, th, td {{ border: 1px solid #ddd; text-align: center; }}
+            th {{ background-color: #FF5500; color: white; padding: 10px; }}
+            td {{ padding: 10px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <img src="https://finchsolucoes.com.br/img/fefdd9df-1bd3-4107-ab22-f06d392c1f55.png" alt="Finch Soluções" width="150px">
+                <h1>Relatório de Produtividade</h1>
+                <h2>{data_inicio.strftime('%B/%Y')}</h2>
+            </div>
+            <div class="highlight">
+                <p style="font-size: 25px;"><strong>Média de TMO de Cadastro</strong> <br>{tmo_medio_geral}</p>
+            </div>
+
+            <canvas id="tmoChart" width="400" height="200"></canvas>
+
+            <script>
+                Chart.register(ChartDataLabels);
+                var ctx = document.getElementById('tmoChart').getContext('2d');
+                var tmoData = {tmo_labels};
+                var tmoChart = new Chart(ctx, {{
+                    type: 'bar',
+                    data: {{
+                        labels: {nomes_analistas},
+                        datasets: [{{
+                            label: 'TMO de Cadastro',
+                            data: {tmo_valores},
+                            backgroundColor: ['#330066', '#FF5500', '#330066', '#FF5500', '#330066', '#FF5500', '#330066', '#FF5500', '#330066'],
+                            borderRadius: 10
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        plugins: {{
+                            datalabels: {{
+                                anchor: 'end',
+                                align: 'top',
+                                formatter: (value, ctx) => tmoData[ctx.dataIndex],
+                                color: '#000'
+                            }},
+                            tooltip: {{
+                                callbacks: {{
+                                    label: function(tooltipItem) {{
+                                        return tmoData[tooltipItem.dataIndex];
+                                    }}
+                                }}
+                            }}
+                        }},
+                        scales: {{
+                            y: {{
+                                beginAtZero: true
+                            }}
+                        }}
+                    }}
+                }});
+            </script>
+
+            <table>
+                <tr>
+                    <th>Analista</th>
+                    <th>TMO de Cadastro</th>
+                    <th>Quantidade de Cadastro</th>
+                    <th>Mês de Referência</th>
+                </tr>
+                {tabela_html}
+            </table>
+        </div>
+    </body>
+    </html>
+    """
+
+    return html_content
+
+
+def download_html_tmo(df, data_inicio, data_fim):
+    """
+    Função para gerar e baixar o relatório HTML de TMO.
+    """
+    html_content = gerar_relatorio_html_tmo(df, data_inicio, data_fim)
+    buffer = BytesIO()
+    buffer.write(html_content.encode("utf-8"))
+    buffer.seek(0)
+
+    st.download_button(
+        label="Baixar Relatório HTML de TMO",
+        data=buffer,
+        file_name="relatorio_tmo.html",
+        mime="text/html"
     )
 
 # FILAS - INCIDENTE, CADASTRO ROBO E CADASTRO ANS - CONTAGEM DA QUANTIDADE DE TAREFAS QEU ENTRARAM POR DIA (PANDAS)

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from .calculations import calcular_tmo_equipe_cadastro, load_sla_data, calcular_sla_por_fila, gerar_planilha_sla, calcular_entrada_protocolos_por_dia, calcular_entrada_por_dia_e_fila, exibir_entrada_por_dia, save_sla_data, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista,exportar_relatorio_detalhado_por_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo
+from .calculations import calcular_tmo_equipe_cadastro, exportar_planilha_com_tmo_completo, gerar_relatorio_html, download_html, download_html_tmo, gerar_relatorio_html_tmo, load_sla_data, calcular_sla_por_fila, gerar_planilha_sla, calcular_entrada_protocolos_por_dia, calcular_entrada_por_dia_e_fila, exibir_entrada_por_dia, save_sla_data, calcular_tmo_equipe_atualizado, calcular_produtividade_diaria, calcular_tmo_por_dia_cadastro, calcular_produtividade_diaria_cadastro, calcular_tmo_por_dia, convert_to_timedelta_for_calculations, convert_to_datetime_for_calculations, save_data, load_data, format_timedelta, calcular_ranking, calcular_filas_analista, calcular_metrica_analista, calcular_carteiras_analista,exportar_relatorio_detalhado_por_analista, get_points_of_attention, calcular_tmo_por_carteira, calcular_tmo, calcular_e_exibir_tmo_por_fila, calcular_tmo_por_mes, exibir_tmo_por_mes, exibir_dataframe_tmo_formatado, export_dataframe, calcular_tempo_ocioso_por_analista, calcular_melhor_tmo_por_dia, calcular_melhor_dia_por_cadastro, exibir_tmo_por_mes_analista, exportar_planilha_com_tmo, calcular_tmo_geral, calcular_tmo_cadastro, calcular_tempo_ocioso, gerar_relatorio_tmo_completo
 from .charts import plot_produtividade_diaria, plot_tmo_por_dia_cadastro, plot_tmo_por_dia_cadastro, exibir_grafico_tp_causa, plot_produtividade_diaria_cadastros, plot_tmo_por_dia, plot_status_pie, grafico_tmo, grafico_status_analista, exibir_grafico_filas_realizadas, exibir_grafico_tmo_por_dia, exibir_grafico_quantidade_por_dia
 from datetime import datetime
 from Amil.diario import diario
@@ -424,6 +424,11 @@ def dashboard():
                 if st.button("Exportar Relatório Detalhado por Analista"):
                     periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
                     exportar_relatorio_detalhado_por_analista(df_total, periodo_selecionado, analistas_selecionados)
+                    
+                # Adicionar botão de exportação para o novo relatório
+                if st.button("Exportar Planilha Completa de TMO"):
+                    periodo_selecionado = (data_inicial_relatorio, data_final_relatorio)
+                    exportar_planilha_com_tmo_completo(df_total, periodo_selecionado, analistas_selecionados)
 
             except ValueError as e:
                 st.warning("Ocorreu um erro ao processar as datas. Verifique se as informações de data estão corretas no seu arquivo. Detalhes do erro:")
@@ -432,6 +437,32 @@ def dashboard():
             except Exception as e:
                 st.warning("Ocorreu um erro inesperado. Por favor, tente novamente. Detalhes do erro:")
                 st.code(str(e))
+
+        if not df_total.empty:
+            with st.expander("Exportar Relatório de TMO em HTML"):
+                # 🔹 Seleção de períodos antes e depois da mudança
+                st.subheader("Selecione os períodos para comparação")
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    data_inicio_antes = st.date_input("Data Inicial Antes", df_total['DATA DE CONCLUSÃO DA TAREFA'].min().date())
+                    data_fim_antes = st.date_input("Data Final Antes", df_total['DATA DE CONCLUSÃO DA TAREFA'].max().date())
+
+                with col2:
+                    data_inicio_depois = st.date_input("Data Inicial Depois", df_total['DATA DE CONCLUSÃO DA TAREFA'].min().date())
+                    data_fim_depois = st.date_input("Data Final Depois", df_total['DATA DE CONCLUSÃO DA TAREFA'].max().date())
+
+                # 🔹 Seleção de usuários
+                usuarios_disponiveis = df_total['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
+                usuarios_selecionados = st.multiselect(
+                    "Selecione os usuários para o relatório",
+                    options=usuarios_disponiveis,
+                    default=usuarios_disponiveis
+                )
+
+                # 🔹 Botão para baixar o HTML
+                if st.button("Gerar e Baixar Relatório HTML"):
+                    download_html(df_total, data_inicio_antes, data_fim_antes, data_inicio_depois, data_fim_depois, usuarios_selecionados)
         
     elif opcao_selecionada == "Métricas Individuais":
         st.title("Métricas Individuais")
