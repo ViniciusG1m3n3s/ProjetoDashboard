@@ -458,31 +458,39 @@ def get_points_of_attention(df):
     return pontos_de_atencao
 
 def calcular_tmo_por_carteira(df):
-    # Verifica se as colunas 'FILA' e 'TEMPO MÉDIO OPERACIONAL' estão no DataFrame
-    if 'FILA' not in df.columns or 'TEMPO MÉDIO OPERACIONAL' not in df.columns:
-        return "As colunas 'FILA' e/ou 'TEMPO MÉDIO OPERACIONAL' não foram encontradas no DataFrame."
-
+    # Verifica se as colunas necessárias estão no DataFrame
+    required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO'}
+    if not required_columns.issubset(df.columns):
+        return "O DataFrame não contém todas as colunas necessárias: 'FILA', 'TEMPO MÉDIO OPERACIONAL' e 'FINALIZAÇÃO'."
+    
     # Remove linhas com valores NaN na coluna 'TEMPO MÉDIO OPERACIONAL'
     df = df.dropna(subset=['TEMPO MÉDIO OPERACIONAL'])
-
+    
     # Verifica se os valores da coluna 'TEMPO MÉDIO OPERACIONAL' são do tipo timedelta
     if not all(isinstance(x, pd.Timedelta) for x in df['TEMPO MÉDIO OPERACIONAL']):
         return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
-
-    # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
+    
+    # Agrupa os dados por 'FILA' e calcula o tempo médio de análise
     tmo_por_carteira = df.groupby('FILA').agg(
         Quantidade=('FILA', 'size'),
-        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean')
+        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean'),
+        Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
+        Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum())
     ).reset_index()
-
+    
+    # Calcula os casos 'Fora do Escopo'
+    tmo_por_carteira['Fora do Escopo'] = (
+        tmo_por_carteira['Quantidade'] - tmo_por_carteira['Cadastrado'] - tmo_por_carteira['Atualizado']
+    )
+    
     # Converte o tempo médio de análise para minutos e segundos
     tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
         lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
     )
-
+    
     # Seleciona apenas as colunas de interesse
-    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'TMO']]
-
+    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO']]
+    
     return tmo_por_carteira
 
 def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
