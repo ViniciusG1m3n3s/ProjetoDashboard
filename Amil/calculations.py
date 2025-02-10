@@ -473,25 +473,36 @@ def calcular_tmo_por_carteira(df):
     # Agrupa os dados por 'FILA' e calcula o tempo médio de análise
     tmo_por_carteira = df.groupby('FILA').agg(
         Quantidade=('FILA', 'size'),
-        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean'),
-        Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
-        Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum())
+        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean')
     ).reset_index()
     
-    # Calcula os casos 'Fora do Escopo'
-    tmo_por_carteira['Fora do Escopo'] = (
-        tmo_por_carteira['Quantidade'] - tmo_por_carteira['Cadastrado'] - tmo_por_carteira['Atualizado']
-    )
+    # Conta a quantidade de cada tipo de FINALIZAÇÃO por FILA
+    finalizacao_counts = df.pivot_table(index='FILA', columns='FINALIZAÇÃO', aggfunc='size', fill_value=0)
+    
+    # Junta os dados de finalização ao DataFrame principal
+    tmo_por_carteira = tmo_por_carteira.merge(finalizacao_counts, on='FILA', how='left')
     
     # Converte o tempo médio de análise para minutos e segundos
     tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
         lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
     )
     
-    # Seleciona apenas as colunas de interesse
-    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO']]
+    # Remove a coluna intermediária de TMO médio
+    tmo_por_carteira.drop(columns=['TMO_médio'], inplace=True)
     
     return tmo_por_carteira
+
+import pandas as pd
+from io import BytesIO
+
+def exportar_para_excel(df):
+    """Exporta o DataFrame para um arquivo Excel em memória."""
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="Relatório TMO")
+        writer.close()
+    output.seek(0)  # Retorna para o início do arquivo
+    return output
 
 def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
     """
