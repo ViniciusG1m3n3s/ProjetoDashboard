@@ -461,48 +461,37 @@ def calcular_tmo_por_carteira(df):
     # Verifica se as colunas necessárias estão no DataFrame
     required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO'}
     if not required_columns.issubset(df.columns):
-        return "O DataFrame não contém todas as colunas necessárias: 'FILA', 'TEMPO MÉDIO OPERACIONAL' e 'FINALIZAÇÃO'."
+        return "As colunas necessárias ('FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO') não foram encontradas no DataFrame."
     
     # Remove linhas com valores NaN na coluna 'TEMPO MÉDIO OPERACIONAL'
     df = df.dropna(subset=['TEMPO MÉDIO OPERACIONAL'])
-    
+
     # Verifica se os valores da coluna 'TEMPO MÉDIO OPERACIONAL' são do tipo timedelta
     if not all(isinstance(x, pd.Timedelta) for x in df['TEMPO MÉDIO OPERACIONAL']):
         return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
     
-    # Agrupa os dados por 'FILA' e calcula o tempo médio de análise
+    # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
     tmo_por_carteira = df.groupby('FILA').agg(
         Quantidade=('FILA', 'size'),
-        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean')
+        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean'),
+        Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
+        Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
     ).reset_index()
-    
-    # Conta a quantidade de cada tipo de FINALIZAÇÃO por FILA
-    finalizacao_counts = df.pivot_table(index='FILA', columns='FINALIZAÇÃO', aggfunc='size', fill_value=0)
-    
-    # Junta os dados de finalização ao DataFrame principal
-    tmo_por_carteira = tmo_por_carteira.merge(finalizacao_counts, on='FILA', how='left')
-    
+
+    # Calcula o 'FORA DO ESCOPO'
+    tmo_por_carteira['Fora do Escopo'] = (
+        tmo_por_carteira['Quantidade'] - tmo_por_carteira['Cadastrado'] - tmo_por_carteira['Atualizado']
+    )
+
     # Converte o tempo médio de análise para minutos e segundos
     tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
         lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
     )
-    
-    # Remove a coluna intermediária de TMO médio
-    tmo_por_carteira.drop(columns=['TMO_médio'], inplace=True)
-    
+
+    # Seleciona apenas as colunas de interesse
+    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO']]
+
     return tmo_por_carteira
-
-import pandas as pd
-from io import BytesIO
-
-def exportar_para_excel(df):
-    """Exporta o DataFrame para um arquivo Excel em memória."""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Relatório TMO")
-        writer.close()
-    output.seek(0)  # Retorna para o início do arquivo
-    return output
 
 def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
     """
