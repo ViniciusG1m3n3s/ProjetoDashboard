@@ -459,9 +459,9 @@ def get_points_of_attention(df):
 
 def calcular_tmo_por_carteira(df):
     # Verifica se as colunas necessárias estão no DataFrame
-    required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO'}
+    required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO'}
     if not required_columns.issubset(df.columns):
-        return "As colunas necessárias ('FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO') não foram encontradas no DataFrame."
+        return "As colunas necessárias ('FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO') não foram encontradas no DataFrame."
     
     # Remove linhas com valores NaN na coluna 'TEMPO MÉDIO OPERACIONAL'
     df = df.dropna(subset=['TEMPO MÉDIO OPERACIONAL'])
@@ -469,6 +469,9 @@ def calcular_tmo_por_carteira(df):
     # Verifica se os valores da coluna 'TEMPO MÉDIO OPERACIONAL' são do tipo timedelta
     if not all(isinstance(x, pd.Timedelta) for x in df['TEMPO MÉDIO OPERACIONAL']):
         return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
+    
+    # Remove duplicatas baseadas no número do protocolo para os casos 'Fora do Escopo'
+    df_unique = df.drop_duplicates(subset=['NÚMERO DO PROTOCOLO'])
     
     # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
     tmo_por_carteira = df.groupby('FILA').agg(
@@ -478,10 +481,13 @@ def calcular_tmo_por_carteira(df):
         Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
     ).reset_index()
 
-    # Calcula o 'FORA DO ESCOPO'
-    tmo_por_carteira['Fora do Escopo'] = (
-        tmo_por_carteira['Quantidade'] - tmo_por_carteira['Cadastrado'] - tmo_por_carteira['Atualizado']
-    )
+    # Calcula o 'FORA DO ESCOPO' considerando apenas protocolos únicos
+    fora_do_escopo_contagem = df_unique.groupby('FILA').apply(
+        lambda x: x.shape[0] - (x['FINALIZAÇÃO'] == 'CADASTRADO').sum() - (x['FINALIZAÇÃO'] == 'ATUALIZADO').sum()
+    ).reset_index(name='Fora do Escopo')
+
+    # Mescla a contagem ajustada de 'Fora do Escopo'
+    tmo_por_carteira = tmo_por_carteira.merge(fora_do_escopo_contagem, on='FILA', how='left')
 
     # Converte o tempo médio de análise para minutos e segundos
     tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
