@@ -462,19 +462,22 @@ def calcular_tmo_por_carteira(df):
     required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO'}
     if not required_columns.issubset(df.columns):
         return "As colunas necessárias ('FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO') não foram encontradas no DataFrame."
-    
+
     # Remove linhas com valores NaN na coluna 'TEMPO MÉDIO OPERACIONAL'
     df = df.dropna(subset=['TEMPO MÉDIO OPERACIONAL'])
 
     # Verifica se os valores da coluna 'TEMPO MÉDIO OPERACIONAL' são do tipo timedelta
     if not all(isinstance(x, pd.Timedelta) for x in df['TEMPO MÉDIO OPERACIONAL']):
         return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
-    
+
     # Remove duplicatas baseadas no número do protocolo para os casos 'Fora do Escopo'
     df_unique = df.drop_duplicates(subset=['NÚMERO DO PROTOCOLO'])
-    
+
+    # Filtra apenas os casos 'CADASTRADO' e 'ATUALIZADO' para o cálculo do TMO
+    df_tmo = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO'])]
+
     # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
-    tmo_por_carteira = df.groupby('FILA').agg(
+    tmo_por_carteira = df_tmo.groupby('FILA').agg(
         Quantidade=('FILA', 'size'),
         TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean'),
         Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
@@ -498,6 +501,64 @@ def calcular_tmo_por_carteira(df):
     tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO']]
 
     return tmo_por_carteira
+
+def calcular_producao_agrupada(df):
+    required_columns = {'FILA', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO'}
+    if not required_columns.issubset(df.columns):
+        return "As colunas necessárias ('FILA', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO') não foram encontradas no DataFrame."
+
+    df_unique = df.drop_duplicates(subset=['NÚMERO DO PROTOCOLO'])
+
+    grupos = {
+        'CAPTURA ANTECIPADA': [' CADASTRO ROBÔ', 'INCIDENTE PROCESSUAL', 'CADASTRO ANS'],
+        'SHAREPOINT': ['CADASTRO SHAREPOINT', 'ATUALIZAÇÃO - SHAREPOINT'],
+        'CITAÇÃO ELETRÔNICA': ['CADASTRO CITAÇÃO ELETRÔNICA', 'ATUALIZAÇÃO CITAÇÃO ELETRÔNICA'],
+        'E-MAIL': ['CADASTRO E-MAIL', 'OFICIOS E-MAIL', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'],
+        'PRE CADASTRO E DIJUR': ['PRE CADASTRO E DIJUR']
+    }
+
+    df['GRUPO'] = df['FILA'].map(lambda x: next((k for k, v in grupos.items() if x in v), 'OUTROS'))
+
+    df_agrupado = df.groupby('GRUPO').agg(
+        Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
+        Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
+        Fora_do_Escopo=('FINALIZAÇÃO', lambda x: ((x != 'CADASTRADO') & (x != 'ATUALIZADO')).sum())
+    ).reset_index()
+
+    return df_agrupado
+
+def calcular_producao_email_detalhada(df):
+    required_columns = {'FILA', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO', 'TAREFA'}
+    if not required_columns.issubset(df.columns):
+        return "As colunas necessárias ('FILA', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO', 'TAREFA') não foram encontradas no DataFrame."
+
+    # Filtrando apenas as filas do grupo E-MAIL
+    df_email = df[df['FILA'].isin(['CADASTRO E-MAIL', 'OFICIOS E-MAIL', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'])]
+
+    # Separando os de CADASTRO E-MAIL para agrupar por TAREFA
+    df_cadastro_email = df_email[df_email['FILA'] == 'CADASTRO E-MAIL']
+    df_outros_email = df_email[df_email['FILA'].isin(['OFICIOS E-MAIL', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'])]
+
+    # Agrupando CADASTRO E-MAIL por TAREFA
+    df_cadastro_email_agrupado = df_cadastro_email.groupby('TAREFA').agg(
+        Quantidade=('FILA', 'size'),
+        Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
+        Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
+        Fora_do_Escopo=('FINALIZAÇÃO', lambda x: ((x != 'CADASTRADO') & (x != 'ATUALIZADO')).sum())
+    ).reset_index()
+
+    # Agrupando os demais (OFICIOS E-MAIL e CADASTRO DE ÓRGÃOS E OFÍCIOS) por FILA
+    df_outros_email_agrupado = df_outros_email.groupby('FILA').agg(
+        Quantidade=('FILA', 'size'),
+        Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
+        Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
+        Fora_do_Escopo=('FINALIZAÇÃO', lambda x: ((x != 'CADASTRADO') & (x != 'ATUALIZADO')).sum())
+    ).reset_index().rename(columns={'FILA': 'TAREFA'})
+
+    # Concatenando os resultados
+    df_email_final = pd.concat([df_cadastro_email_agrupado, df_outros_email_agrupado], ignore_index=True)
+
+    return df_email_final
 
 def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
     """
