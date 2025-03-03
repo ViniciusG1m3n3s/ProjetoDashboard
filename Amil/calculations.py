@@ -492,9 +492,9 @@ def calcular_tmo_por_carteira(df):
     # Mescla a contagem ajustada de 'Fora do Escopo'
     tmo_por_carteira = tmo_por_carteira.merge(fora_do_escopo_contagem, on='FILA', how='left')
 
-    # Converte o tempo médio de análise para minutos e segundos
+    # Converte o tempo médio de análise para HH:MM:SS
     tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
-        lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}"
+        lambda x: f"{int(x.total_seconds() // 3600):02d}:{int((x.total_seconds() % 3600) // 60):02d}:{int(x.total_seconds() % 60):02d}"
     )
 
     # Seleciona apenas as colunas de interesse
