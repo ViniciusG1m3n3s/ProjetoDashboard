@@ -397,6 +397,31 @@ def dashboard():
             
             # Exibir a tabela de ranking
             st.dataframe(styled_df_ranking, width=2000)
+            
+                # Injetando CSS e JavaScript para aumentar o tamanho do modal
+        st.markdown("""
+            <style>
+                div [tabindex="-1"] {
+                    width: 80% !important;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # Função para exibir o Power BI no modal
+        @st.dialog("BI - Qualidade AMIL", width="large")
+        def abrir_bi():
+
+            iframe_code = """
+            <iframe title="BI_QUALIDADE_AMIL" width="100%" height="600" 
+                    src="https://app.powerbi.com/reportEmbed?reportId=c023e127-5bc0-46e5-8589-2196b78aa72f&autoAuth=true&ctid=0a336fa9-e4fe-4a46-8908-98290f728ce3" 
+                    frameborder="0" allowFullScreen="true"></iframe>
+            """
+
+            st.components.v1.html(iframe_code, height=600)
+
+        # Botão para abrir o modal
+        if st.button("Abrir Power BI"):
+            abrir_bi()
         
         with st.expander("Exportar Dados"):
             try:    
@@ -626,7 +651,7 @@ def dashboard():
                 exibir_grafico_tp_causa(df_analista, analista_selecionado, custom_colors, st)
                 
     elif opcao_selecionada == "Diário de Bordo":
-        st.header("Análise de SLA")
+
 
         # Upload de arquivo SLA
         uploaded_file = st.file_uploader("Faça o upload do arquivo SLA", type=["xlsx"])
