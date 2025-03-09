@@ -115,6 +115,10 @@ def plot_produtividade_diaria_cadastros(df_produtividade_cadastro, custom_colors
     # Exibir o gráfico na dashboard
     st.plotly_chart(fig, use_container_width=True)
 
+import plotly.express as px
+import pandas as pd
+import streamlit as st
+
 def plot_tmo_por_dia(df_tmo, custom_colors):
     if df_tmo.empty or 'Dia' not in df_tmo.columns or 'TMO' not in df_tmo.columns:
         st.warning("Não há dados para exibir no gráfico de TMO por dia.")
@@ -123,71 +127,129 @@ def plot_tmo_por_dia(df_tmo, custom_colors):
     # Garantir que não existam NaN ou valores inválidos na coluna 'TMO'
     df_tmo = df_tmo.dropna(subset=['TMO'])
 
-    # Verificar e formatar a coluna TMO como minutos e segundos
+    # Converter TMO para formato HH:MM:SS
     df_tmo['TMO_Formatado'] = df_tmo['TMO'].apply(
-        lambda x: f"{int(x.total_seconds() // 60):02}:{int(x.total_seconds() % 60):02}" if pd.notnull(x) else "00:00"
+        lambda x: f"{int(x.total_seconds() // 3600):02}:{int((x.total_seconds() % 3600) // 60):02}:{int(x.total_seconds() % 60):02}" 
+        if pd.notnull(x) else "00:00:00"
     )
 
-    # Criar o gráfico de linhas
+    # Definir período mínimo e máximo para o slider
+    df_tmo = df_tmo.sort_values(by='Dia')
+    data_minima = df_tmo['Dia'].min()
+    data_maxima = df_tmo['Dia'].max()
+
+    # Criar slider interativo (nome único para evitar conflito)
+    periodo_tmo_selecionado = st.slider(
+        "Selecione o período para TMO por Dia",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=30), data_maxima),
+        format="DD MMM YYYY"
+    )
+
+    # Filtrar os dados pelo período selecionado
+    df_tmo_filtrado = df_tmo[
+        (df_tmo['Dia'] >= periodo_tmo_selecionado[0]) &
+        (df_tmo['Dia'] <= periodo_tmo_selecionado[1])
+    ]
+
+    # Criar gráfico de linha com pontos
     fig_tmo_linha = px.line(
-        df_tmo,
+        df_tmo_filtrado,
         x='Dia',
-        y=df_tmo['TMO'].dt.total_seconds() / 60,  # Converter TMO para minutos
+        y=df_tmo_filtrado['TMO'].dt.total_seconds() / 60,  # Converter TMO para minutos
         labels={'y': 'Tempo Médio Operacional (min)', 'Dia': 'Data'},
         color_discrete_sequence=custom_colors,
         line_shape='linear',
         markers=True
     )
 
-    fig_tmo_linha.update_layout(
-        xaxis=dict(
-            tickvals=df_tmo['Dia'],
-            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo['Dia']]
-        )
-    )
-
-    # Personalizar o hover e exibir o gráfico
+    # Melhorar a formatação do hover e eixo X
     fig_tmo_linha.update_traces(
-        text=df_tmo['TMO_Formatado'],
+        text=df_tmo_filtrado['TMO_Formatado'],
         textposition='top center',
         hovertemplate='Data = %{x|%d/%m/%Y}<br>TMO = %{text}'
     )
+
+    fig_tmo_linha.update_layout(
+        xaxis=dict(
+            tickvals=df_tmo_filtrado['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo_filtrado['Dia']],
+            title='Data'
+        ),
+        yaxis=dict(
+            title='Tempo Médio Operacional (HH:MM:SS)'
+        )
+    )
+
     return fig_tmo_linha
+
 
 def plot_tmo_por_dia_cadastro(df_tmo_cadastro, custom_colors):
     if df_tmo_cadastro.empty or 'Dia' not in df_tmo_cadastro.columns or 'TMO' not in df_tmo_cadastro.columns:
         st.warning("Não há dados para exibir no gráfico de TMO por dia.")
         return None
 
+    # Garantir que a coluna TMO seja timedelta
     if isinstance(df_tmo_cadastro['TMO'].iloc[0], str):
-        df_tmo_cadastro['TMO'] = pd.to_timedelta(df_tmo_cadastro['TMO'].apply(lambda x: x.replace(' min', 'm').replace('s', 's')))
-    
-    df_tmo_cadastro['TMO_Formatado'] = df_tmo_cadastro['TMO'].apply(lambda x: f"{int(x.total_seconds() // 60)}:{int(x.total_seconds() % 60):02d}")
-    
-    fig_tmo_linha = px.line(
-        df_tmo_cadastro,
+        df_tmo_cadastro['TMO'] = pd.to_timedelta(df_tmo_cadastro['TMO'])
+
+    # Converter TMO para formato HH:MM:SS
+    df_tmo_cadastro['TMO_Formatado'] = df_tmo_cadastro['TMO'].apply(
+        lambda x: f"{int(x.total_seconds() // 3600):02}:{int((x.total_seconds() % 3600) // 60):02}:{int(x.total_seconds() % 60):02}"
+        if pd.notnull(x) else "00:00:00"
+    )
+
+    # Definir período mínimo e máximo para o slider
+    df_tmo_cadastro = df_tmo_cadastro.sort_values(by='Dia')
+    data_minima = df_tmo_cadastro['Dia'].min()
+    data_maxima = df_tmo_cadastro['Dia'].max()
+
+    # Criar slider interativo (nome único para evitar conflito)
+    periodo_tmo_cadastro_selecionado = st.slider(
+        "Selecione o período para TMO de Cadastro",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=30), data_maxima),
+        format="DD MMM YYYY"
+    )
+
+    # Filtrar os dados pelo período selecionado
+    df_tmo_cadastro_filtrado = df_tmo_cadastro[
+        (df_tmo_cadastro['Dia'] >= periodo_tmo_cadastro_selecionado[0]) &
+        (df_tmo_cadastro['Dia'] <= periodo_tmo_cadastro_selecionado[1])
+    ]
+
+    # Criar gráfico de linha com pontos
+    fig_tmo_cadastro_linha = px.line(
+        df_tmo_cadastro_filtrado,
         x='Dia',
-        y=df_tmo_cadastro['TMO'].dt.total_seconds() / 60,  # Converte TMO para minutos
+        y=df_tmo_cadastro_filtrado['TMO'].dt.total_seconds() / 60,  # Converte TMO para minutos
         labels={'y': 'Tempo Médio Operacional (min)', 'Dia': 'Data'},
         color_discrete_sequence=custom_colors,
         line_shape='linear',
         markers=True
     )
-    
-    fig_tmo_linha.update_layout(
-        xaxis=dict(
-            tickvals=df_tmo_cadastro['Dia'],
-            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo_cadastro['Dia']]
-    )
-)
-    
-    fig_tmo_linha.update_traces(
-        text=df_tmo_cadastro['TMO_Formatado'],
+
+    # Melhorar a formatação do hover e eixo X
+    fig_tmo_cadastro_linha.update_traces(
+        text=df_tmo_cadastro_filtrado['TMO_Formatado'],
         textposition='top center',
         hovertemplate='Data = %{x|%d/%m/%Y}<br>TMO = %{text}'
     )
 
-    return fig_tmo_linha
+    fig_tmo_cadastro_linha.update_layout(
+        xaxis=dict(
+            tickvals=df_tmo_cadastro_filtrado['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo_cadastro_filtrado['Dia']],
+            title='Data'
+        ),
+        yaxis=dict(
+            title='Tempo Médio Operacional (HH:MM:SS)'
+        )
+    )
+
+    return fig_tmo_cadastro_linha
 
 def plot_status_pie(total_parcial, total_nao_tratada, total_completa, custom_colors):
     fig_status = px.pie(
