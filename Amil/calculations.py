@@ -7,18 +7,18 @@ from io import BytesIO
 from datetime import timedelta
 
 def load_data(usuario):
-    excel_file = f'dados_acumulados_{usuario}.xlsx'  # Caminho completo do arquivo
-    # Verifica se o arquivo existe e se está intacto
+    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Caminho do arquivo Parquet
+    
     try:
-        if os.path.exists(excel_file):
-            df_total = pd.read_excel(excel_file)
+        if os.path.exists(parquet_file):
+            df_total = pd.read_parquet(parquet_file)
             
             # Verifica se a coluna 'Justificativa' existe, caso contrário, adiciona ela
             if 'Justificativa' not in df_total.columns:
-                df_total['Justificativa'] = ""  # Adiciona a coluna de justificativa com valores vazios
+                df_total['Justificativa'] = ""  # Adiciona a coluna com valores vazios
         else:
             raise FileNotFoundError
-        
+    
     except (FileNotFoundError, ValueError, OSError):
         # Cria um DataFrame vazio com a coluna 'Justificativa' e salva um novo arquivo
         df_total = pd.DataFrame(columns=[
@@ -30,12 +30,12 @@ def load_data(usuario):
             'FINALIZAÇÃO',
             'Justificativa'  # Inclui a coluna de justificativa ao criar um novo DataFrame
         ])
-        df_total.to_excel(excel_file, index=False)
+        df_total.to_parquet(parquet_file, index=False)
     
     return df_total
 
 def save_data(df, usuario):
-    excel_file = f'dados_acumulados_{usuario}.xlsx'  # Nome do arquivo específico do usuário
+    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Nome do arquivo específico do usuário
 
     # Certifique-se de que a coluna 'Justificativa' existe antes de salvar
     if 'Justificativa' not in df.columns:
@@ -44,11 +44,9 @@ def save_data(df, usuario):
     # Remove registros com 'USUÁRIO QUE CONCLUIU A TAREFA' igual a 'robohub_amil'
     if 'USUÁRIO QUE CONCLUIU A TAREFA' in df.columns:
         df = df[(df['USUÁRIO QUE CONCLUIU A TAREFA'] != 'robohub_amil') & (df['USUÁRIO QUE CONCLUIU A TAREFA'].notnull())]
-
-    # Salva o DataFrame no arquivo Excel
-    df['TEMPO MÉDIO OPERACIONAL'] = df['TEMPO MÉDIO OPERACIONAL'].astype(str)  # Ajuste de tipo de coluna, se necessário
-    df.to_excel(excel_file, index=False)
-
+    
+    # Salva o DataFrame no formato Parquet
+    df.to_parquet(parquet_file, index=False)
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
@@ -298,64 +296,126 @@ def calcular_tempo_ocioso_por_analista(df):
             df['DATA DE CONCLUSÃO DA TAREFA'], format='%d/%m/%Y %H:%M:%S', errors='coerce'
         )
 
-        # Filtrar ou preencher valores nulos nas colunas de data
+        # Filtrar valores nulos e resetar index
         df = df.dropna(subset=['DATA DE INÍCIO DA TAREFA', 'DATA DE CONCLUSÃO DA TAREFA']).reset_index(drop=True)
 
-        # Ordena os dados por usuário e data de início da tarefa
+        # Ordena os dados por usuário e data de início da tarefa (sem considerar fila)
         df = df.sort_values(by=['USUÁRIO QUE CONCLUIU A TAREFA', 'DATA DE INÍCIO DA TAREFA']).reset_index(drop=True)
 
-        # Calcula o próximo horário de início da tarefa por usuário
-        df['PRÓXIMO'] = df.groupby('USUÁRIO QUE CONCLUIU A TAREFA')['DATA DE INÍCIO DA TAREFA'].shift(-1)
+        # Calcula o próximo horário de início da tarefa por usuário (sem considerar fila)
+        df['PRÓXIMA_TAREFA'] = df.groupby(['USUÁRIO QUE CONCLUIU A TAREFA'])['DATA DE INÍCIO DA TAREFA'].shift(-1)
 
-        # Extração dos dias para comparar conclusões e inícios
-        df['DIA_CONCLUSAO'] = df['DATA DE CONCLUSÃO DA TAREFA'].dt.date
-        df['DIA_PROXIMO'] = df['PRÓXIMO'].dt.date
+        # Calcula o tempo ocioso entre a conclusão de uma tarefa e o início da próxima
+        df['TEMPO OCIOSO'] = df['PRÓXIMA_TAREFA'] - df['DATA DE CONCLUSÃO DA TAREFA']
 
-        # Calcula o tempo ocioso entre tarefas no mesmo dia
-        df['TEMPO OCIOSO'] = df.apply(
-            lambda row: (row['PRÓXIMO'] - row['DATA DE CONCLUSÃO DA TAREFA'])
-            if row['DIA_CONCLUSAO'] == row['DIA_PROXIMO'] else pd.Timedelta(0),
-            axis=1
-        )
+        # Remove valores negativos ou muito grandes (exemplo: trocas de turno)
+        df['TEMPO OCIOSO'] = df['TEMPO OCIOSO'].apply(lambda x: x if pd.notnull(x) and pd.Timedelta(0) < x <= pd.Timedelta(hours=1) else pd.Timedelta(0))
 
-        # Filtra para tempo ocioso <= 1 hora e antes das 18h
-        df['TEMPO OCIOSO'] = df.apply(
-            lambda row: row['TEMPO OCIOSO']
-            if (row['TEMPO OCIOSO'] <= pd.Timedelta(hours=1)) and (row['DATA DE CONCLUSÃO DA TAREFA'].hour < 18)
-            else pd.Timedelta(0),
-            axis=1
-        )
+        # Agrupa os tempos ociosos por usuário e dia de conclusão, somando todas as filas
+        df_soma_ocioso = df.groupby(['USUÁRIO QUE CONCLUIU A TAREFA', df['DATA DE CONCLUSÃO DA TAREFA'].dt.date])['TEMPO OCIOSO'].sum().reset_index()
 
-        # Formata o tempo ocioso como string
-        df['TEMPO_OCIOSO_FORMATADO'] = df['TEMPO OCIOSO'].apply(
-            lambda x: str(pd.to_timedelta(x)).split("days")[-1].strip() if pd.notnull(x) else '0:00:00'
-        )
-
-        # Agrupa os tempos ociosos por usuário e dia de conclusão
-        df_soma_ocioso = df.groupby(['USUÁRIO QUE CONCLUIU A TAREFA', 'DIA_CONCLUSAO'])['TEMPO OCIOSO'].sum().reset_index()
-
-        # Formata o tempo ocioso somado
-        df_soma_ocioso['TEMPO_OCIOSO_FORMATADO'] = df_soma_ocioso['TEMPO OCIOSO'].apply(
-            lambda x: str(pd.to_timedelta(x)).split("days")[-1].strip() if pd.notnull(x) else '0:00:00'
-        )
-
-        # Renomeia as colunas para exibição
+        # Renomeia colunas para melhor entendimento
         df_soma_ocioso = df_soma_ocioso.rename(columns={
-            'DIA_CONCLUSAO': 'Data',
-            'TEMPO_OCIOSO_FORMATADO': 'Tempo Ocioso'
+            'DATA DE CONCLUSÃO DA TAREFA': 'Data',
+            'TEMPO OCIOSO': 'Tempo Ocioso'
         })
 
-        # Retorna o DataFrame sem índice e ajustado para Streamlit
-        return df_soma_ocioso[['Data', 'Tempo Ocioso']]
+        # Formata o tempo ocioso total como string
+        df_soma_ocioso['Tempo Ocioso'] = df_soma_ocioso['Tempo Ocioso'].astype(str).str.split("days").str[-1].str.strip()
+
+        return df_soma_ocioso[['USUÁRIO QUE CONCLUIU A TAREFA', 'Data', 'Tempo Ocioso']]
 
     except Exception as e:
-        # Em caso de erro, retorna um DataFrame com a mensagem de erro
-        error_df = pd.DataFrame({
-            'Usuário': ['Erro'],
-            'Data': [''],
-            'Tempo Ocioso': [f'Erro: {str(e)}']
-        })
-        return error_df
+        return pd.DataFrame({'Erro': [f'Erro: {str(e)}']})
+
+def format_timedelta_hms(td):
+    """ Formata um timedelta para HH:MM:SS """
+    if pd.isnull(td):
+        return "00:00:00"
+    total_seconds = int(td.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+def exibir_grafico_tempo_ocioso_por_dia(df_analista, analista_selecionado, custom_colors, st):
+    """
+    Gera e exibe um gráfico de barras com o Tempo Ocioso diário para um analista específico.
+
+    Parâmetros:
+        - df_analista: DataFrame contendo os dados de análise.
+        - analista_selecionado: Nome do analista selecionado.
+        - custom_colors: Lista de cores personalizadas para o gráfico.
+        - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
+    """
+
+    # Calcular o tempo ocioso diário por analista
+    df_ocioso = calcular_tempo_ocioso_por_analista(df_analista)
+
+    # Converter a coluna 'Tempo Ocioso' para timedelta para cálculos
+    df_ocioso['Tempo Ocioso'] = pd.to_timedelta(df_ocioso['Tempo Ocioso'], errors='coerce')
+
+    # Filtrar apenas o analista selecionado
+    df_ocioso = df_ocioso[df_ocioso['USUÁRIO QUE CONCLUIU A TAREFA'] == analista_selecionado]
+
+    # Determinar o período disponível no dataset
+    data_minima = df_ocioso['Data'].min()
+    data_maxima = df_ocioso['Data'].max()
+
+    # Criar um slider interativo para seleção de período
+    periodo_selecionado = st.slider(
+        "Selecione o período",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=30), data_maxima),  # Últimos 30 dias por padrão
+        format="DD MMM YYYY"  # Formato: Dia Mês Ano (Exemplo: 01 Jan 2025)
+    )
+
+    # Filtrar os dados com base no período selecionado
+    df_ocioso = df_ocioso[
+        (df_ocioso['Data'] >= periodo_selecionado[0]) &
+        (df_ocioso['Data'] <= periodo_selecionado[1])
+    ]
+
+    # Formatar a coluna 'Tempo Ocioso' para exibição no gráfico como HH:MM:SS
+    df_ocioso['Tempo Ocioso Formatado'] = df_ocioso['Tempo Ocioso'].apply(format_timedelta_hms)
+
+    # Converter tempo ocioso para total de segundos (para exibição correta no gráfico)
+    df_ocioso['Tempo Ocioso Segundos'] = df_ocioso['Tempo Ocioso'].dt.total_seconds()
+
+    # Criar o gráfico de barras
+    fig_ocioso = px.bar(
+        df_ocioso, 
+        x='Data', 
+        y='Tempo Ocioso Segundos', 
+        labels={'Tempo Ocioso Segundos': 'Tempo Ocioso (HH:MM:SS)', 'Data': 'Data'},
+        text=df_ocioso['Tempo Ocioso Formatado'],  # Exibir tempo formatado nas barras
+        color_discrete_sequence=custom_colors
+    )
+
+    # Ajuste do layout
+    fig_ocioso.update_layout(
+        xaxis=dict(
+            tickvals=df_ocioso['Data'],
+            ticktext=[f"{dia.day} {dia.strftime('%b')} {dia.year}" for dia in df_ocioso['Data']],
+            title='Data'
+        ),
+        yaxis=dict(
+            title='Tempo Ocioso (HH:MM:SS)',
+            tickvals=[i * 3600 for i in range(0, int(df_ocioso['Tempo Ocioso Segundos'].max() // 3600) + 1)],
+            ticktext=[format_timedelta_hms(pd.Timedelta(seconds=i * 3600)) for i in range(0, int(df_ocioso['Tempo Ocioso Segundos'].max() // 3600) + 1)]
+        ),
+        bargap=0.2  # Espaçamento entre as barras
+    )
+
+    # Personalizar o gráfico
+    fig_ocioso.update_traces(
+        hovertemplate='Data = %{x}<br>Tempo Ocioso = %{text}',  # Formato do hover
+        textposition="outside",  # Exibir rótulos acima das barras
+        textfont_color='white'  # Define a cor do texto como branco
+    )
+
+    # Exibir o gráfico na dashboard
+    st.plotly_chart(fig_ocioso, use_container_width=True)
 
 def calcular_tmo_equipe_cadastro(df_total):
     return df_total[df_total['FINALIZAÇÃO'].isin(['CADASTRADO'])]['TEMPO MÉDIO OPERACIONAL'].mean()
@@ -391,6 +451,8 @@ def calcular_filas_analista(df_analista):
     else:
         # Caso a coluna 'Carteira' não exista
         return pd.DataFrame({'Fila': [], 'Finalizados': [], 'Reclassificados': [], 'Andamento': [], 'TMO Médio por Fila': []})
+    
+
 
 def calcular_tmo_por_dia(df_analista):
     # Filtrar apenas as tarefas com finalização "CADASTRADO"
@@ -826,6 +888,179 @@ def exibir_tmo_por_mes_analista(df_analista, analista_selecionado):
     # Criar e exibir a tabela com os dados formatados
     df_tmo_mes_filtrado['Mês'] = df_tmo_mes_filtrado['AnoMes']  # Renomear para exibição
     df_tmo_formatado = df_tmo_mes_filtrado[['Mês', 'TMO_Formatado']].rename(columns={'TMO_Formatado': 'Tempo Médio Operacional'})
+    st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
+
+    return df_tmo_formatado
+
+
+def calcular_grafico_tmo_analista_por_mes(df_analista):
+    """
+    Calcula o TMO Geral, Cadastro e Atualização por mês para um analista específico.
+    
+    Parâmetro:
+        - df_analista: DataFrame contendo as tarefas do analista.
+    
+    Retorna:
+        - DataFrame com TMO_Geral, TMO_Cadastro e TMO_Atualizacao por mês.
+    """
+    if df_analista.empty:
+        return pd.DataFrame(columns=['AnoMes', 'TMO_Geral', 'TMO_Cadastro', 'TMO_Atualizacao'])
+    
+    # Converter 'TEMPO MÉDIO OPERACIONAL' para timedelta se necessário
+    if not pd.api.types.is_timedelta64_dtype(df_analista['TEMPO MÉDIO OPERACIONAL']):
+        df_analista['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df_analista['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
+
+    df_analista['AnoMes'] = df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.to_period('M')
+
+    df_geral = df_analista[df_analista['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO', 'REALIZADO'])]
+    df_cadastro = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
+    df_atualizacao = df_analista[df_analista['FINALIZAÇÃO'] == 'ATUALIZADO']
+
+    def calcular_tmo(df, nome_coluna):
+        if df.empty:
+            return pd.DataFrame(columns=['AnoMes', nome_coluna])
+        
+        df_tmo = df.groupby('AnoMes').agg(
+            Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),
+            Total_Protocolos=('TEMPO MÉDIO OPERACIONAL', 'count')
+        ).reset_index()
+        
+        df_tmo[nome_coluna] = df_tmo['Tempo_Total'] / df_tmo['Total_Protocolos']
+        df_tmo = df_tmo[['AnoMes', nome_coluna]]
+        
+        return df_tmo
+
+    df_tmo_geral = calcular_tmo(df_geral, 'TMO_Geral')
+    df_tmo_cadastro = calcular_tmo(df_cadastro, 'TMO_Cadastro')
+    df_tmo_atualizacao = calcular_tmo(df_atualizacao, 'TMO_Atualizacao')
+
+    df_tmo_mes = df_tmo_geral.merge(df_tmo_cadastro, on='AnoMes', how='left').merge(df_tmo_atualizacao, on='AnoMes', how='left')
+
+    df_tmo_mes.fillna(pd.Timedelta(seconds=0), inplace=True)
+    df_tmo_mes['AnoMes'] = df_tmo_mes['AnoMes'].dt.to_timestamp().dt.strftime('%B de %Y').str.capitalize()
+
+    return df_tmo_mes
+
+def format_timedelta_grafico_tmo_analista(td):
+    """Formata um timedelta no formato HH:MM:SS"""
+    if pd.isna(td) or td == pd.Timedelta(seconds=0):
+        return "00:00:00"
+    
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+def format_timedelta_hms(timedelta_value):
+    """Formata um timedelta em HH:MM:SS"""
+    total_seconds = int(timedelta_value.total_seconds())
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+def exibir_grafico_tmo_analista_por_mes(df_analista, analista_selecionado):
+    """
+    Exibe um gráfico de barras agrupadas do TMO mensal (Geral, Cadastro, Atualização) para um analista específico.
+
+    Parâmetros:
+        - df_analista: DataFrame filtrado para o analista.
+        - analista_selecionado: Nome do analista selecionado.
+    """
+    # Calcular o TMO por mês
+    df_tmo_mes = calcular_grafico_tmo_analista_por_mes(df_analista)
+
+    # Verificar se há dados para exibir
+    if df_tmo_mes.empty:
+        st.warning(f"Não há dados para calcular o TMO mensal do analista {analista_selecionado}.")
+        return None
+
+    # Formatar os tempos para HH:MM:SS
+    for col in ['TMO_Geral', 'TMO_Cadastro', 'TMO_Atualizacao']:
+        df_tmo_mes[col + '_Formatado'] = df_tmo_mes[col].apply(format_timedelta_hms)
+
+    # Criar um multiselect para filtrar os meses disponíveis
+    meses_disponiveis = df_tmo_mes['AnoMes'].unique()
+    meses_selecionados = st.multiselect(
+        "Selecione os meses para exibição",
+        options=meses_disponiveis,
+        default=meses_disponiveis
+    )
+
+    # Filtrar os dados com base nos meses selecionados
+    df_tmo_mes_filtrado = df_tmo_mes[df_tmo_mes['AnoMes'].isin(meses_selecionados)]
+
+    # Verificar se há dados após o filtro
+    if df_tmo_mes_filtrado.empty:
+        st.warning("Nenhum dado disponível para os meses selecionados.")
+        return None
+
+    # Transformar os dados para exibição no gráfico (de wide para long format)
+    df_tmo_long = df_tmo_mes_filtrado.melt(
+        id_vars=['AnoMes'], 
+        value_vars=['TMO_Geral', 'TMO_Cadastro', 'TMO_Atualizacao'], 
+        var_name='Tipo de TMO', 
+        value_name='Tempo Médio Operacional'
+    )
+
+    # Criar dicionário correto para mapear valores formatados
+    format_dict = df_tmo_mes_filtrado.set_index('AnoMes')[
+        ['TMO_Geral_Formatado', 'TMO_Cadastro_Formatado', 'TMO_Atualizacao_Formatado']
+    ].stack().reset_index()
+
+    format_dict.columns = ['AnoMes', 'Tipo de TMO', 'Tempo Formatado']
+    format_dict['Tipo de TMO'] = format_dict['Tipo de TMO'].str.replace('_Formatado', '')
+
+    # Converter `format_dict` para dicionário correto
+    format_map = format_dict.set_index(['AnoMes', 'Tipo de TMO'])['Tempo Formatado'].to_dict()
+
+    # Definir a paleta de cores extraída da imagem
+    custom_colors = {
+        'TMO_Geral': '#ff6a1c',        # Laranja forte
+        'TMO_Cadastro': '#d1491c',     # Vermelho queimado médio
+        'TMO_Atualizacao': '#a3330f'   # Vermelho queimado escuro
+    }
+
+    # Criar rótulos corrigidos
+    tipo_tmo_label = {
+        'TMO_Geral': 'Geral',
+        'TMO_Cadastro': 'Cadastro',
+        'TMO_Atualizacao': 'Atualização'
+    }
+
+    df_tmo_long['Texto_Rotulo'] = df_tmo_long.apply(
+        lambda row: f"{tipo_tmo_label[row['Tipo de TMO']]} - {format_map.get((row['AnoMes'], row['Tipo de TMO']), '')}",
+        axis=1
+    )
+
+    # Criar o gráfico de barras
+    fig = px.bar(
+        df_tmo_long,
+        x='AnoMes',
+        y='Tempo Médio Operacional',
+        color='Tipo de TMO',
+        text=df_tmo_long['Texto_Rotulo'],
+        barmode='group',
+        labels={'AnoMes': 'Mês', 'Tempo Médio Operacional': 'Tempo Médio Operacional (HH:MM:SS)'},
+        color_discrete_map=custom_colors
+    )
+
+    # Ajustar espaçamento entre as barras
+    fig.update_layout(bargap=0.2, bargroupgap=0.15)
+
+    # Posicionar os rótulos corretamente
+    fig.update_traces(textposition='outside')
+
+    # Remover a legenda
+    fig.update_layout(showlegend=False)
+
+    # Exibir o gráfico na dashboard
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Criar e exibir a tabela com os dados formatados
+    df_tmo_formatado = df_tmo_mes_filtrado[['AnoMes', 'TMO_Geral_Formatado', 'TMO_Cadastro_Formatado', 'TMO_Atualizacao_Formatado']]
+    df_tmo_formatado.columns = ['AnoMes', 'TMO Geral', 'TMO Cadastro', 'TMO Atualização']
     st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
 
     return df_tmo_formatado

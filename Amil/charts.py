@@ -3,42 +3,117 @@ import os
 import pandas as pd
 import streamlit as st
 import plotly.graph_objs as go
+import streamlit as st
 
 def plot_produtividade_diaria(df_produtividade, custom_colors):
     if df_produtividade.empty or 'Dia' not in df_produtividade.columns or 'Produtividade' not in df_produtividade.columns:
         st.warning("Não há dados para exibir no gráfico de produtividade diária.")
-    else:
-        fig_produtividade = px.line(
-                        df_produtividade,
-                        x='Dia',
-                        y='Produtividade',
-                        color_discrete_sequence=custom_colors,
-                        labels={'Produtividade': 'Total de Cadastros'},
-                        line_shape='linear',
-                        markers=True
-                    )
-        fig_produtividade.update_traces(
-                        hovertemplate='Dia = %{x|%d/%m/%Y}<br>Produtividade = %{y}'
-                    )
-        st.plotly_chart(fig_produtividade)
-        
+        return None
+
+    # Ordenar e definir período mínimo e máximo
+    df_produtividade = df_produtividade.sort_values(by='Dia')
+    data_minima = df_produtividade['Dia'].min()
+    data_maxima = df_produtividade['Dia'].max()
+
+    # Criar slider interativo para seleção de período
+    periodo_selecionado_plot_produtividade = st.slider(
+        "Selecione o período",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=21), data_maxima),
+        format="DD MMM YYYY"
+    )
+
+    # Filtrar os dados pelo período selecionado
+    df_filtrado = df_produtividade[
+        (df_produtividade['Dia'] >= periodo_selecionado_plot_produtividade[0]) &
+        (df_produtividade['Dia'] <= periodo_selecionado_plot_produtividade[1])
+    ]
+
+    # Criar gráfico de linha com pontos
+    fig = px.line(
+        df_filtrado,
+        x='Dia',
+        y='Produtividade',
+        color_discrete_sequence=custom_colors,
+        labels={'Produtividade': 'Total de Cadastros', 'Dia': 'Data'},
+        line_shape='linear',
+        markers=True
+    )
+
+    # Melhorar a formatação do hover e eixo X
+    fig.update_traces(
+        hovertemplate='Data = %{x|%d/%m/%Y}<br>Produtividade = %{y}'
+    )
+
+    fig.update_layout(
+        xaxis=dict(
+            tickvals=df_filtrado['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_filtrado['Dia']],
+            title='Data'
+        ),
+        yaxis=dict(
+            title='Total de Cadastros'
+        )
+    )
+
+    # Exibir o gráfico na dashboard
+    st.plotly_chart(fig, use_container_width=True)
+    
 def plot_produtividade_diaria_cadastros(df_produtividade_cadastro, custom_colors):
     if df_produtividade_cadastro.empty or 'Dia' not in df_produtividade_cadastro.columns or 'Produtividade' not in df_produtividade_cadastro.columns:
         st.warning("Não há dados para exibir no gráfico de produtividade diária.")
-    else:
-        fig_produtividade = px.line(
-                        df_produtividade_cadastro,
-                        x='Dia',
-                        y='Produtividade',
-                        color_discrete_sequence=custom_colors,
-                        labels={'Produtividade': 'Total de Cadastros'},
-                        line_shape='linear',
-                        markers=True
-                    )
-        fig_produtividade.update_traces(
-                        hovertemplate='Dia = %{x|%d/%m/%Y}<br>Produtividade = %{y}'
-                    )
-        st.plotly_chart(fig_produtividade)
+        return None
+
+    # Ordenar e definir período mínimo e máximo
+    df_produtividade_cadastro = df_produtividade_cadastro.sort_values(by='Dia')
+    data_minima = df_produtividade_cadastro['Dia'].min()
+    data_maxima = df_produtividade_cadastro['Dia'].max()
+
+    # Criar slider interativo para seleção de período
+    periodo_selecionado_produtividade = st.slider(
+        "Selecione o período",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=30), data_maxima),
+        format="DD MMM YYYY"
+    )
+
+    # Filtrar os dados pelo período selecionado
+    df_filtrado = df_produtividade_cadastro[
+        (df_produtividade_cadastro['Dia'] >= periodo_selecionado_produtividade[0]) &
+        (df_produtividade_cadastro['Dia'] <= periodo_selecionado_produtividade[1])
+    ]
+
+    # Criar gráfico de linha com pontos
+    fig = px.line(
+        df_filtrado,
+        x='Dia',
+        y='Produtividade',
+        color_discrete_sequence=custom_colors,
+        labels={'Produtividade': 'Total de Cadastros', 'Dia': 'Data'},
+        line_shape='linear',
+        markers=True
+    )
+
+    # Melhorar a formatação do hover e eixo X
+    fig.update_traces(
+        hovertemplate='Data = %{x|%d/%m/%Y}<br>Produtividade = %{y}'
+    )
+
+    fig.update_layout(
+        xaxis=dict(
+            tickvals=df_filtrado['Dia'],
+            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_filtrado['Dia']],
+            title='Data'
+        ),
+        yaxis=dict(
+            title='Total de Cadastros'
+        )
+    )
+
+    # Exibir o gráfico na dashboard
+    st.plotly_chart(fig, use_container_width=True)
 
 def plot_tmo_por_dia(df_tmo, custom_colors):
     if df_tmo.empty or 'Dia' not in df_tmo.columns or 'TMO' not in df_tmo.columns:
@@ -301,6 +376,9 @@ def format_timedelta_Chart(td):
     return f"{minutes} min {seconds}s"
 
 
+import plotly.express as px
+import pandas as pd
+
 def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_por_dia, custom_colors, st):
     """
     Gera e exibe um gráfico de barras com o Tempo Médio Operacional (TMO) por dia para um analista específico.
@@ -320,15 +398,34 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
     df_tmo_analista['TMO_segundos'] = df_tmo_analista['TMO'].dt.total_seconds()
     df_tmo_analista['TMO_minutos'] = df_tmo_analista['TMO_segundos'] / 60
 
-    # Formatar TMO para exibição como "X min Y s"
+    # Formatar TMO para exibição como "HH:MM:SS"
     df_tmo_analista['TMO_formatado'] = df_tmo_analista['TMO'].apply(format_timedelta_Chart)
+
+    # Determinar a data mínima e máxima do dataset
+    data_minima = df_tmo_analista['Dia'].min()
+    data_maxima = df_tmo_analista['Dia'].max()
+
+    # Criar um slider interativo para seleção de período no formato Dia Mês Ano
+    periodo_selecionado_tmo = st.slider(
+        "Selecione o período",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=10), data_maxima),
+        format="DD MMM YYYY"  # Formato: Dia Mês Ano (ex: 01 Mar 2025)
+    )
+
+    # Filtrar os dados com base no período selecionado
+    df_tmo_analista = df_tmo_analista[
+        (df_tmo_analista['Dia'] >= periodo_selecionado_tmo[0]) &
+        (df_tmo_analista['Dia'] <= periodo_selecionado_tmo[1])
+    ]
 
     # Criar o gráfico de barras
     fig_tmo_analista = px.bar(
         df_tmo_analista, 
         x='Dia', 
         y='TMO_minutos', 
-        labels={'TMO_minutos': 'TMO (min)', 'Dia': 'Dia'},
+        labels={'TMO_minutos': 'TMO (min)', 'Dia': 'Data'},
         text=df_tmo_analista['TMO_formatado'],  # Exibe o tempo formatado nas barras
         color_discrete_sequence=custom_colors
     )
@@ -336,22 +433,27 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
     fig_tmo_analista.update_layout(
         xaxis=dict(
             tickvals=df_tmo_analista['Dia'],
-            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_tmo_analista['Dia']]
-        )
+            ticktext=[f"{dia.day} {dia.strftime('%b')} {dia.year}" for dia in df_tmo_analista['Dia']],
+            title='Data'
+        ),
+        yaxis=dict(title='TMO (min)'),
+        bargap=0.2  # Espaçamento entre as barras
     )
 
     # Personalizar o gráfico
     fig_tmo_analista.update_traces(
-        hovertemplate='Data = %{x}<br>TMO = %{text}',  # Formato do hover
+        hovertemplate='Data: %{x}<br>TMO: %{text}',  # Formato do hover
         textfont_color='white'  # Define a cor do texto como branco
     )
 
     # Exibir o gráfico na dashboard
-    st.plotly_chart(fig_tmo_analista)
+    st.plotly_chart(fig_tmo_analista, use_container_width=True)
+
 
 def exibir_grafico_quantidade_por_dia(df_analista, analista_selecionado, custom_colors, st):
     """
-    Gera e exibe um gráfico de barras com a quantidade de tarefas realizadas por dia para um analista específico.
+    Gera e exibe um gráfico de barras com a quantidade de tarefas realizadas por dia para um analista específico,
+    mostrando por padrão apenas os últimos 30 dias e permitindo ajuste de período via slider.
 
     Parâmetros:
         - df_analista: DataFrame contendo os dados de análise.
@@ -360,9 +462,31 @@ def exibir_grafico_quantidade_por_dia(df_analista, analista_selecionado, custom_
         - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
     """
 
+    # Ordenar os dados por data
+    df_analista = df_analista.sort_values(by='DATA DE CONCLUSÃO DA TAREFA')
+
     # Agrupar os dados por dia e contar a quantidade de tarefas realizadas
     df_quantidade_analista = df_analista.groupby(df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.date).size().reset_index(name='Quantidade')
     df_quantidade_analista = df_quantidade_analista.rename(columns={'DATA DE CONCLUSÃO DA TAREFA': 'Dia'})
+
+    # Determinar a data mínima e máxima do dataset
+    data_minima = df_quantidade_analista['Dia'].min()
+    data_maxima = df_quantidade_analista['Dia'].max()
+
+    # Criar um slider interativo para seleção de período no formato Dia Mês Ano
+    periodo_selecionado = st.slider(
+        "Selecione o período",
+        min_value=data_minima,
+        max_value=data_maxima,
+        value=(data_maxima - pd.Timedelta(days=11), data_maxima),
+        format="DD MMM YYYY"  # Formato: Dia Mês Ano (ex: 01 Mar 2025)
+    )
+
+    # Filtrar os dados com base no período selecionado
+    df_quantidade_analista = df_quantidade_analista[
+        (df_quantidade_analista['Dia'] >= periodo_selecionado[0]) &
+        (df_quantidade_analista['Dia'] <= periodo_selecionado[1])
+    ]
 
     # Criar o gráfico de barras
     fig_quantidade_analista = px.bar(
@@ -373,24 +497,23 @@ def exibir_grafico_quantidade_por_dia(df_analista, analista_selecionado, custom_
         text='Quantidade',  # Exibe a quantidade nas barras
         color_discrete_sequence=custom_colors
     )
-    
+
+    # Ajuste para melhorar a legibilidade
     fig_quantidade_analista.update_layout(
         xaxis=dict(
             tickvals=df_quantidade_analista['Dia'],
-            ticktext=[f"{dia.day}/{dia.month}/{dia.year}" for dia in df_quantidade_analista['Dia']],
+            ticktext=[f"{dia.day} {dia.strftime('%b')} {dia.year}" for dia in df_quantidade_analista['Dia']],  # Formato Dia Mês Ano
             title='Data'
         ),
-        yaxis=dict(
-            title='Quantidade de Tarefas'
-        ),
+        yaxis=dict(title='Quantidade de Tarefas'),
         bargap=0.2  # Espaçamento entre as barras
     )
 
     # Personalizar o gráfico
     fig_quantidade_analista.update_traces(
-        hovertemplate='Data = %{x}<br>Quantidade = %{y}',  # Formato do hover
+        hovertemplate='Data: %{x}<br>Quantidade: %{y}',  # Formato do hover
         textfont_color='white'  # Define a cor do texto como branco
     )
 
     # Exibir o gráfico na dashboard
-    st.plotly_chart(fig_quantidade_analista)
+    st.plotly_chart(fig_quantidade_analista, use_container_width=True)
