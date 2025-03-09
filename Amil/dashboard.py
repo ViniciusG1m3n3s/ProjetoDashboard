@@ -374,7 +374,26 @@ def dashboard():
             # Filtro de analistas
             st.subheader("Tempo Médio Operacional por Analista")
             analistas = df_tmo_analista['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
-            selected_analistas = st.multiselect("Selecione os analistas", analistas, default=analistas)
+            
+            default_users = [
+                "mariagrangeiro",
+                "ingridvieira_amil",
+                "amandacampos_amil",
+                "eduardaantevere_amil",
+                "fabianapietro_amil",
+                "luizfernandes_amil",
+                "fernandaferreira_amil",
+                "jennifercosta_amil",
+                "elianeabreu",
+                "sararodrigues_amil",
+                "camilabarros_amil"
+            ]
+                        
+            selected_analistas = st.multiselect(
+                "Selecione os Analistas:",
+                options=analistas,
+                default=default_users
+            )
 
             # Mostrar o gráfico de TMO
             df_tmo_analista_filtered = df_tmo_analista[df_tmo_analista['USUÁRIO QUE CONCLUIU A TAREFA'].isin(selected_analistas)]
@@ -386,11 +405,27 @@ def dashboard():
         
         with st.container(border=True):
             # Seleção de usuários para o ranking
+            default_users = [
+                "amandacampos_amil",
+                "eduardaantevere_amil",
+                "fabianapietro_amil",
+                "luizfernandes_amil",
+                "fernandaferreira_amil",
+                "jennifercosta_amil",
+                "elianeabreu",
+                "sararodrigues_amil",
+                "camilabarros_amil"
+            ]
+            
             st.subheader("Ranking de Produtividade")
             
             # Selecione os usuários
             users = df_total['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
-            selected_users = st.multiselect("Selecione os usuários", users, default=users)
+            selected_users = st.multiselect(
+                "Selecione os Analistas:",
+                options=users,
+                default=default_users
+            )
             
             # Calcular o ranking
             styled_df_ranking = calcular_ranking(df_total, selected_users)

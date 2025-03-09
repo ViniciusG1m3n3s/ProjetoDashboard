@@ -595,11 +595,11 @@ def calcular_producao_email_detalhada(df):
         return "As colunas necessárias ('FILA', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO', 'TAREFA') não foram encontradas no DataFrame."
 
     # Filtrando apenas as filas do grupo E-MAIL
-    df_email = df[df['FILA'].isin(['CADASTRO E-MAIL', 'OFICIOS E-MAIL', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'])]
+    df_email = df[df['FILA'].isin(['CADASTRO E-MAIL', 'OFICIOS', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'])]
 
     # Separando os de CADASTRO E-MAIL para agrupar por TAREFA
     df_cadastro_email = df_email[df_email['FILA'] == 'CADASTRO E-MAIL']
-    df_outros_email = df_email[df_email['FILA'].isin(['OFICIOS E-MAIL', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'])]
+    df_outros_email = df_email[df_email['FILA'].isin(['OFICIOS', 'CADASTRO DE ÓRGÃOS E OFÍCIOS'])]
 
     # Agrupando CADASTRO E-MAIL por TAREFA
     df_cadastro_email_agrupado = df_cadastro_email.groupby('TAREFA').agg(
