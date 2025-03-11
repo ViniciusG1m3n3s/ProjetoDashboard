@@ -374,25 +374,10 @@ def dashboard():
             # Filtro de analistas
             st.subheader("Tempo Médio Operacional por Analista")
             analistas = df_tmo_analista['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
-            
-            default_users = [
-                "mariagrangeiro",
-                "ingridvieira_amil",
-                "amandacampos_amil",
-                "eduardaantevere_amil",
-                "fabianapietro_amil",
-                "luizfernandes_amil",
-                "fernandaferreira_amil",
-                "jennifercosta_amil",
-                "elianeabreu",
-                "sararodrigues_amil",
-                "camilabarros_amil"
-            ]
                         
             selected_analistas = st.multiselect(
                 "Selecione os Analistas:",
-                options=analistas,
-                default=default_users
+                options=analistas
             )
 
             # Mostrar o gráfico de TMO
@@ -423,8 +408,7 @@ def dashboard():
             users = df_total['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
             selected_users = st.multiselect(
                 "Selecione os Analistas:",
-                options=users,
-                default=default_users
+                options=users
             )
             
             # Calcular o ranking
