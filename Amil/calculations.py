@@ -629,7 +629,7 @@ def calcular_producao_email_detalhada(df):
 
     return df_email_final
 
-def calcular_e_exibir_tmo_cadastro_atualizacao_por_fila(df_analista, format_timedelta_hms, st):
+def calcular_e_exibir_tmo_cadastro_atualizacao_por_fila (df_analista, format_timedelta_hms, st):
     """
     Calcula e exibe o TMO médio de Cadastro e Atualização por Fila,
     junto com a quantidade de tarefas realizadas, na dashboard do Streamlit.
