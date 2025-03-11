@@ -245,13 +245,16 @@ def calcular_ranking(df_total, selected_users):
     return styled_df_ranking
 
 #MÉTRICAS INDIVIDUAIS
+import pandas as pd
+import streamlit as st
+
 def calcular_metrica_analista(df_analista):
     # Verifica se as colunas necessárias estão presentes no DataFrame
-    colunas_necessarias = ['FILA', 'FINALIZAÇÃO', 'TEMPO MÉDIO OPERACIONAL']
+    colunas_necessarias = ['FILA', 'FINALIZAÇÃO', 'TEMPO MÉDIO OPERACIONAL', 'DATA DE CONCLUSÃO DA TAREFA']
     for coluna in colunas_necessarias:
         if coluna not in df_analista.columns:
             st.warning(f"A coluna '{coluna}' não está disponível nos dados. Verifique o arquivo carregado.")
-            return None, None, None, None, None, None  # Atualizado para retornar seis valores
+            return None, None, None, None, None, None, None  # Atualizado para retornar sete valores
 
     # Excluir os registros com "FILA" como "Desconhecida"
     df_analista_filtrado = df_analista[df_analista['FILA'] != "Desconhecida"]
@@ -284,7 +287,11 @@ def calcular_metrica_analista(df_analista):
     total_tarefas = total_finalizados + total_atualizado + total_realizados
     tempo_medio_analista = tempo_total_analista / total_tarefas if total_tarefas > 0 else pd.Timedelta(0)
 
-    return total_finalizados, total_atualizado, tempo_medio_analista, tmo_cadastrado, tmo_atualizado, total_realizados
+    # Calcular a média de cadastros por dias trabalhados
+    dias_trabalhados = df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'CADASTRADO']['DATA DE CONCLUSÃO DA TAREFA'].dt.date.nunique()
+    media_cadastros_por_dia = int(total_finalizados / dias_trabalhados) if dias_trabalhados > 0 else 0
+
+    return total_finalizados, total_atualizado, tempo_medio_analista, tmo_cadastrado, tmo_atualizado, total_realizados, media_cadastros_por_dia, dias_trabalhados
 
 def calcular_tempo_ocioso_por_analista(df):
     try:
@@ -621,6 +628,58 @@ def calcular_producao_email_detalhada(df):
     df_email_final = pd.concat([df_cadastro_email_agrupado, df_outros_email_agrupado], ignore_index=True)
 
     return df_email_final
+
+def calcular_e_exibir_tmo_cadastro_atualizacao_por_fila(df_analista, format_timedelta_hms, st):
+    """
+    Calcula e exibe o TMO médio de Cadastro e Atualização por Fila,
+    junto com a quantidade de tarefas realizadas, na dashboard do Streamlit.
+
+    Parâmetros:
+        - df_analista: DataFrame contendo os dados de análise.
+        - format_timedelta_hms: Função para formatar a duração do TMO em HH:MM:SS.
+        - st: Referência para o módulo Streamlit (necessário para exibir os resultados).
+    """
+    if 'FILA' in df_analista.columns and 'FINALIZAÇÃO' in df_analista.columns:
+        # Filtrar apenas as tarefas finalizadas com CADASTRADO e ATUALIZADO
+        filas_finalizadas_analista = df_analista[df_analista['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO'])]
+
+        # Agrupar os dados por 'FILA' e calcular a quantidade de tarefas por fila
+        df_quantidade = filas_finalizadas_analista.groupby('FILA').size().reset_index(name='Quantidade')
+
+        # Calcular o TMO médio para cada fila separadamente
+        df_tmo_cadastro = filas_finalizadas_analista[filas_finalizadas_analista['FINALIZAÇÃO'] == 'CADASTRADO'].groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
+        df_tmo_atualizacao = filas_finalizadas_analista[filas_finalizadas_analista['FINALIZAÇÃO'] == 'ATUALIZADO'].groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
+
+        # Renomear colunas
+        df_tmo_cadastro.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO_Cadastro'}, inplace=True)
+        df_tmo_atualizacao.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO_Atualizacao'}, inplace=True)
+
+        # Unir os DataFrames pela Fila
+        df_resultado = df_quantidade.merge(df_tmo_cadastro, on='FILA', how='left').merge(df_tmo_atualizacao, on='FILA', how='left')
+
+        # Substituir valores NaN por Timedelta(0)
+        df_resultado.fillna(pd.Timedelta(seconds=0), inplace=True)
+
+        # Converter os TMOs para HH:MM:SS
+        df_resultado['TMO_Cadastro'] = df_resultado['TMO_Cadastro'].apply(format_timedelta_hms)
+        df_resultado['TMO_Atualizacao'] = df_resultado['TMO_Atualizacao'].apply(format_timedelta_hms)
+
+        # Renomear colunas para exibição
+        df_resultado.rename(columns={
+            'FILA': 'Fila',
+            'Quantidade': 'Quantidade',
+            'TMO_Cadastro': 'TMO Cadastro',
+            'TMO_Atualizacao': 'TMO Atualização'
+        }, inplace=True)
+
+        # Estilizar tabela no Streamlit
+        styled_df = df_resultado.style.format({'Quantidade': '{:.0f}', 'TMO Cadastro': '{}', 'TMO Atualização': '{}'}).set_properties(**{'text-align': 'left'})
+        styled_df = styled_df.set_table_styles([dict(selector='th', props=[('text-align', 'left')])])
+
+        # Exibir DataFrame estilizado na dashboard
+        st.dataframe(styled_df, hide_index=True, use_container_width=True)
+    else:
+        st.warning("As colunas necessárias ('FILA' e 'FINALIZAÇÃO') não foram encontradas no DataFrame.")
 
 def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
     """
