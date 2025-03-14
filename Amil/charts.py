@@ -456,6 +456,19 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
     # Calcular o TMO por dia
     df_tmo_analista = calcular_tmo_por_dia(df_analista)
 
+    # Verificar se o DataFrame está vazio
+    if df_tmo_analista.empty:
+        st.warning(f"Não há dados disponíveis para o analista {analista_selecionado}.")
+        return
+
+    # Garantir que a coluna 'TMO' está preenchida
+    if 'TMO' not in df_tmo_analista.columns or df_tmo_analista['TMO'].isna().all():
+        st.warning("Não há valores válidos de TMO disponíveis.")
+        return
+
+    # Preencher valores NaN com um timedelta de 0 segundos para evitar erros
+    df_tmo_analista['TMO'] = df_tmo_analista['TMO'].fillna(pd.Timedelta(seconds=0))
+
     # Converter a coluna "TMO" (Timedelta) para minutos e segundos
     df_tmo_analista['TMO_segundos'] = df_tmo_analista['TMO'].dt.total_seconds()
     df_tmo_analista['TMO_minutos'] = df_tmo_analista['TMO_segundos'] / 60
@@ -463,7 +476,19 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
     # Formatar TMO para exibição como "HH:MM:SS"
     df_tmo_analista['TMO_formatado'] = df_tmo_analista['TMO'].apply(format_timedelta_Chart)
 
+    # Verificar se a coluna 'Dia' existe e contém dados válidos
+    if 'Dia' not in df_tmo_analista.columns or df_tmo_analista['Dia'].isna().all():
+        st.warning("Não há dados de datas disponíveis.")
+        return
+
+    # Remover valores NaN na coluna 'Dia'
+    df_tmo_analista = df_tmo_analista.dropna(subset=['Dia'])
+
     # Determinar a data mínima e máxima do dataset
+    if df_tmo_analista.empty:
+        st.warning("Não há dados suficientes para exibir o gráfico.")
+        return
+
     data_minima = df_tmo_analista['Dia'].min()
     data_maxima = df_tmo_analista['Dia'].max()
 
@@ -478,9 +503,14 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
 
     # Filtrar os dados com base no período selecionado
     df_tmo_analista = df_tmo_analista[
-        (df_tmo_analista['Dia'] >= periodo_selecionado_tmo[0]) &
+        (df_tmo_analista['Dia'] >= periodo_selecionado_tmo[0]) & 
         (df_tmo_analista['Dia'] <= periodo_selecionado_tmo[1])
     ]
+
+    # Se após o filtro não houver dados, exibir uma mensagem amigável
+    if df_tmo_analista.empty:
+        st.warning("Não há registros de TMO para o período selecionado.")
+        return
 
     # Criar o gráfico de barras
     fig_tmo_analista = px.bar(
@@ -510,7 +540,6 @@ def exibir_grafico_tmo_por_dia(df_analista, analista_selecionado, calcular_tmo_p
 
     # Exibir o gráfico na dashboard
     st.plotly_chart(fig_tmo_analista, use_container_width=True)
-
 
 def exibir_grafico_quantidade_por_dia(df_analista, analista_selecionado, custom_colors, st):
     """
