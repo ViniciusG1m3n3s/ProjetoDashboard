@@ -528,9 +528,12 @@ def get_points_of_attention(df):
 
 import pandas as pd
 
+import pandas as pd
+
 def calcular_tmo_por_carteira(df):
     """
     Calcula o Tempo Médio Operacional (TMO) por carteira, separando o TMO de Cadastro e o TMO de Atualização.
+    Para a fila "Distribuição", o cálculo do TMO considera todas as tarefas finalizadas como "REALIZADO".
 
     Parâmetros:
         df (pd.DataFrame): DataFrame contendo as colunas 'FILA', 'TEMPO MÉDIO OPERACIONAL', 
@@ -538,7 +541,7 @@ def calcular_tmo_por_carteira(df):
 
     Retorno:
         pd.DataFrame: DataFrame contendo as colunas 'FILA', 'Quantidade', 'Cadastrado', 'Atualizado',
-                      'Fora do Escopo', 'TMO_Geral', 'TMO_Cadastro' e 'TMO_Atualizacao'.
+                      'Fora do Escopo', 'TMO Cadastro' e 'TMO Atualização'.
     """
     # Verifica se as colunas necessárias estão no DataFrame
     required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO'}
@@ -555,28 +558,43 @@ def calcular_tmo_por_carteira(df):
     # Remove duplicatas baseadas no número do protocolo para os casos 'Fora do Escopo'
     df_unique = df.drop_duplicates(subset=['NÚMERO DO PROTOCOLO'])
 
-    # Filtrar apenas tarefas "CADASTRADAS" e "ATUALIZADAS"
-    df_tmo = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO'])]
+    # Filtrar apenas tarefas "CADASTRADO" e "ATUALIZADO" (exceto Distribuição)
+    df_tmo = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO']) & (df['FILA'] != 'Distribuição')]
 
     # Agrupar por fila para calcular as quantidades e médias separadas
     tmo_por_carteira = df_tmo.groupby('FILA').agg(
         Quantidade=('FILA', 'size'),
-        TMO_Geral=('TEMPO MÉDIO OPERACIONAL', 'mean'),
         Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
         Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
     ).reset_index()
 
     # Calcular TMO apenas para "CADASTRADO"
     df_cadastro = df[df['FINALIZAÇÃO'] == 'CADASTRADO'].groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
-    df_cadastro.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO_Cadastro'}, inplace=True)
+    df_cadastro.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO Cadastro'}, inplace=True)
 
     # Calcular TMO apenas para "ATUALIZADO"
     df_atualizacao = df[df['FINALIZAÇÃO'] == 'ATUALIZADO'].groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
-    df_atualizacao.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO_Atualizacao'}, inplace=True)
+    df_atualizacao.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO Atualização'}, inplace=True)
+
+    # Calcular TMO para a fila "Distribuição" considerando apenas "REALIZADO"
+    df_distribuicao = df[(df['FILA'] == 'Distribuição') & (df['FINALIZAÇÃO'] == 'REALIZADO')]
+
+    if not df_distribuicao.empty:
+        tmo_distribuicao = df_distribuicao.groupby('FILA').agg(
+            Quantidade=('FILA', 'size'),
+            TMO_Distribuicao=('TEMPO MÉDIO OPERACIONAL', 'mean')
+        ).reset_index()
+        tmo_distribuicao.rename(columns={'TMO_Distribuicao': 'TMO Cadastro'}, inplace=True)
+        tmo_distribuicao['TMO Atualização'] = None  # A fila "Distribuição" não tem TMO Atualização
+    else:
+        tmo_distribuicao = pd.DataFrame(columns=['FILA', 'Quantidade', 'TMO Cadastro', 'TMO Atualização'])
 
     # Unir os dados ao DataFrame principal
     tmo_por_carteira = tmo_por_carteira.merge(df_cadastro, on='FILA', how='left')
     tmo_por_carteira = tmo_por_carteira.merge(df_atualizacao, on='FILA', how='left')
+
+    # Adicionar a fila "Distribuição" ao resultado final
+    tmo_por_carteira = pd.concat([tmo_por_carteira, tmo_distribuicao], ignore_index=True)
 
     # Calcular 'Fora do Escopo' considerando apenas protocolos únicos
     fora_do_escopo_contagem = df_unique.groupby('FILA').apply(
@@ -593,12 +611,11 @@ def calcular_tmo_por_carteira(df):
         total_seconds = int(td.total_seconds())
         return f"{total_seconds // 3600:02d}:{(total_seconds % 3600) // 60:02d}:{total_seconds % 60:02d}"
 
-    tmo_por_carteira['TMO_Geral'] = tmo_por_carteira['TMO_Geral'].apply(format_timedelta)
-    tmo_por_carteira['TMO_Cadastro'] = tmo_por_carteira['TMO_Cadastro'].apply(format_timedelta)
-    tmo_por_carteira['TMO_Atualizacao'] = tmo_por_carteira['TMO_Atualizacao'].apply(format_timedelta)
+    tmo_por_carteira['TMO Cadastro'] = tmo_por_carteira['TMO Cadastro'].apply(format_timedelta)
+    tmo_por_carteira['TMO Atualização'] = tmo_por_carteira['TMO Atualização'].apply(format_timedelta)
 
     # Selecionar apenas as colunas finais
-    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO_Geral', 'TMO_Cadastro', 'TMO_Atualizacao']]
+    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO Cadastro', 'TMO Atualização']]
 
     return tmo_por_carteira
 
