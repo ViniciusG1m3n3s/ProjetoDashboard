@@ -996,7 +996,8 @@ def calcular_grafico_tmo_analista_por_mes(df_analista):
     df_tmo_mes = df_tmo_geral.merge(df_tmo_cadastro, on='AnoMes', how='left').merge(df_tmo_atualizacao, on='AnoMes', how='left')
 
     df_tmo_mes.fillna(pd.Timedelta(seconds=0), inplace=True)
-    df_tmo_mes['AnoMes'] = df_tmo_mes['AnoMes'].dt.to_timestamp().dt.strftime('%B de %Y').str.capitalize()
+    df_tmo_mes['AnoMes'] = pd.to_datetime(df_tmo_mes['AnoMes'], errors='coerce')  # Converter para datetime
+    df_tmo_mes['AnoMes'] = df_tmo_mes['AnoMes'].dt.strftime('%B de %Y').str.capitalize()
 
     return df_tmo_mes
 
