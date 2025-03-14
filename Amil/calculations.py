@@ -526,48 +526,79 @@ def get_points_of_attention(df):
 
     return pontos_de_atencao
 
+import pandas as pd
+
 def calcular_tmo_por_carteira(df):
+    """
+    Calcula o Tempo Médio Operacional (TMO) por carteira, separando o TMO de Cadastro e o TMO de Atualização.
+
+    Parâmetros:
+        df (pd.DataFrame): DataFrame contendo as colunas 'FILA', 'TEMPO MÉDIO OPERACIONAL', 
+                           'FINALIZAÇÃO' e 'NÚMERO DO PROTOCOLO'.
+
+    Retorno:
+        pd.DataFrame: DataFrame contendo as colunas 'FILA', 'Quantidade', 'Cadastrado', 'Atualizado',
+                      'Fora do Escopo', 'TMO_Geral', 'TMO_Cadastro' e 'TMO_Atualizacao'.
+    """
     # Verifica se as colunas necessárias estão no DataFrame
     required_columns = {'FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO'}
     if not required_columns.issubset(df.columns):
-        return "As colunas necessárias ('FILA', 'TEMPO MÉDIO OPERACIONAL', 'FINALIZAÇÃO', 'NÚMERO DO PROTOCOLO') não foram encontradas no DataFrame."
+        return "As colunas necessárias não foram encontradas no DataFrame."
 
     # Remove linhas com valores NaN na coluna 'TEMPO MÉDIO OPERACIONAL'
     df = df.dropna(subset=['TEMPO MÉDIO OPERACIONAL'])
 
     # Verifica se os valores da coluna 'TEMPO MÉDIO OPERACIONAL' são do tipo timedelta
-    if not all(isinstance(x, pd.Timedelta) for x in df['TEMPO MÉDIO OPERACIONAL']):
+    if not pd.api.types.is_timedelta64_dtype(df['TEMPO MÉDIO OPERACIONAL']):
         return "A coluna 'TEMPO MÉDIO OPERACIONAL' contém valores que não são do tipo timedelta."
 
     # Remove duplicatas baseadas no número do protocolo para os casos 'Fora do Escopo'
     df_unique = df.drop_duplicates(subset=['NÚMERO DO PROTOCOLO'])
 
-    # Filtra apenas os casos 'CADASTRADO' e 'ATUALIZADO' para o cálculo do TMO
+    # Filtrar apenas tarefas "CADASTRADAS" e "ATUALIZADAS"
     df_tmo = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO'])]
 
-    # Agrupa os dados por fila e calcula o tempo médio de análise para cada grupo
+    # Agrupar por fila para calcular as quantidades e médias separadas
     tmo_por_carteira = df_tmo.groupby('FILA').agg(
         Quantidade=('FILA', 'size'),
-        TMO_médio=('TEMPO MÉDIO OPERACIONAL', 'mean'),
+        TMO_Geral=('TEMPO MÉDIO OPERACIONAL', 'mean'),
         Cadastrado=('FINALIZAÇÃO', lambda x: (x == 'CADASTRADO').sum()),
         Atualizado=('FINALIZAÇÃO', lambda x: (x == 'ATUALIZADO').sum()),
     ).reset_index()
 
-    # Calcula o 'FORA DO ESCOPO' considerando apenas protocolos únicos
+    # Calcular TMO apenas para "CADASTRADO"
+    df_cadastro = df[df['FINALIZAÇÃO'] == 'CADASTRADO'].groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
+    df_cadastro.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO_Cadastro'}, inplace=True)
+
+    # Calcular TMO apenas para "ATUALIZADO"
+    df_atualizacao = df[df['FINALIZAÇÃO'] == 'ATUALIZADO'].groupby('FILA')['TEMPO MÉDIO OPERACIONAL'].mean().reset_index()
+    df_atualizacao.rename(columns={'TEMPO MÉDIO OPERACIONAL': 'TMO_Atualizacao'}, inplace=True)
+
+    # Unir os dados ao DataFrame principal
+    tmo_por_carteira = tmo_por_carteira.merge(df_cadastro, on='FILA', how='left')
+    tmo_por_carteira = tmo_por_carteira.merge(df_atualizacao, on='FILA', how='left')
+
+    # Calcular 'Fora do Escopo' considerando apenas protocolos únicos
     fora_do_escopo_contagem = df_unique.groupby('FILA').apply(
         lambda x: x.shape[0] - (x['FINALIZAÇÃO'] == 'CADASTRADO').sum() - (x['FINALIZAÇÃO'] == 'ATUALIZADO').sum()
     ).reset_index(name='Fora do Escopo')
 
-    # Mescla a contagem ajustada de 'Fora do Escopo'
+    # Mesclar a contagem de 'Fora do Escopo'
     tmo_por_carteira = tmo_por_carteira.merge(fora_do_escopo_contagem, on='FILA', how='left')
 
-    # Converte o tempo médio de análise para HH:MM:SS
-    tmo_por_carteira['TMO'] = tmo_por_carteira['TMO_médio'].apply(
-        lambda x: f"{int(x.total_seconds() // 3600):02d}:{int((x.total_seconds() % 3600) // 60):02d}:{int(x.total_seconds() % 60):02d}"
-    )
+    # Converter os tempos médios para HH:MM:SS
+    def format_timedelta(td):
+        if pd.isna(td):
+            return "00:00:00"
+        total_seconds = int(td.total_seconds())
+        return f"{total_seconds // 3600:02d}:{(total_seconds % 3600) // 60:02d}:{total_seconds % 60:02d}"
 
-    # Seleciona apenas as colunas de interesse
-    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO']]
+    tmo_por_carteira['TMO_Geral'] = tmo_por_carteira['TMO_Geral'].apply(format_timedelta)
+    tmo_por_carteira['TMO_Cadastro'] = tmo_por_carteira['TMO_Cadastro'].apply(format_timedelta)
+    tmo_por_carteira['TMO_Atualizacao'] = tmo_por_carteira['TMO_Atualizacao'].apply(format_timedelta)
+
+    # Selecionar apenas as colunas finais
+    tmo_por_carteira = tmo_por_carteira[['FILA', 'Quantidade', 'Cadastrado', 'Atualizado', 'Fora do Escopo', 'TMO_Geral', 'TMO_Cadastro', 'TMO_Atualizacao']]
 
     return tmo_por_carteira
 
