@@ -230,7 +230,7 @@ def dashboard():
         df_total = df_total[(df_total['DATA DE CONCLUSÃO DA TAREFA'].dt.date >= data_inicial) & (df_total['DATA DE CONCLUSÃO DA TAREFA'].dt.date <= data_final)]
 
         # Métricas de produtividade
-        total_finalizados = len(df_total[df_total['FINALIZAÇÃO'] == 'CADASTRADO'])
+        total_finalizados = len(df_total[df_total['SITUAÇÃO DA TAREFA'] == 'Finalizada'])
         total_atualizados = len(df_total[df_total['FINALIZAÇÃO'] == 'ATUALIZADO'])
         total_distribuidos = len(df_total[df_total['FINALIZAÇÃO'] == 'REALIZADO'])
         total_geral = total_finalizados + total_atualizados + total_distribuidos
@@ -238,7 +238,7 @@ def dashboard():
         # Calcular tempo médio geral, verificando se o total geral é maior que zero
         if total_geral > 0:
             tempo_medio = (
-                df_total[df_total['FINALIZAÇÃO'] == 'CADASTRADO']['TEMPO MÉDIO OPERACIONAL'].sum() +
+                df_total[df_total['SITUAÇÃO DA TAREFA'] == 'Finalizada']['TEMPO MÉDIO OPERACIONAL'].sum() +
                 df_total[df_total['FINALIZAÇÃO'] == 'ATUALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum() +
                 df_total[df_total['FINALIZAÇÃO'] == 'REALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
             ) / total_geral
@@ -406,11 +406,13 @@ def dashboard():
             
             # Selecione os usuários
             users = df_total['USUÁRIO QUE CONCLUIU A TAREFA'].unique()
+            
             selected_users = st.multiselect(
                 "Selecione os Analistas:",
                 options=users,
-                key="multiselect_ranking"
+                key="analistas_multiselect"
             )
+
             # Calcular o ranking
             styled_df_ranking = calcular_ranking(df_total, selected_users)
             
@@ -572,10 +574,10 @@ def dashboard():
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             with st.container(border=True):
-                st.metric("Total Geral", total_finalizados_analista+total_atualizado_analista+total_realizados_analista, f"Tempo Médio - {format_timedelta(tempo_medio_analista)}", delta_color="off")  
+                st.metric("Total de Tarefas Atendidas", total_finalizados_analista+total_atualizado_analista+total_realizados_analista, f"Tempo Médio - {format_timedelta(tempo_medio_analista)}", delta_color="off")  
         with col2:
             with st.container(border=True):
-                st.metric("Total Cadastrados", total_finalizados_analista, f"Tempo Médio - {format_timedelta(tmo_cadastrado_analista)}",  delta_color="off")
+                st.metric("Total de Tarefas Finalizadas", total_finalizados_analista, f"Tempo Médio - {format_timedelta(tmo_cadastrado_analista)}",  delta_color="off")
         with col3:
             with st.container(border=True):
                 st.metric("Total Atualizado", total_atualizado_analista, f"Tempo Médio - {format_timedelta(tmo_atualizado_analista)}",  delta_color="off")
@@ -598,34 +600,34 @@ def dashboard():
         melhor_dia_tmo, melhor_tmo = calcular_melhor_tmo_por_dia(df_analista)
         melhor_dia_cadastro, quantidade_cadastro = calcular_melhor_dia_por_cadastro(df_analista)
     
-        with st.expander("Melhor TMO e Quantidade de Cadastro"):
-            col1, col2 = st.columns(2)
-            with col1:
-                with st.container(border=True):
-                    if melhor_dia_tmo and melhor_tmo:
-                        formatted_tmo = format_timedelta(melhor_tmo)
-                        st.metric("Melhor TMO", formatted_tmo, f"Dia {melhor_dia_tmo.strftime('%d/%m/%Y')}")
-                    else:
-                        st.metric("Melhor TMO", "Sem dados")
-            with col2:
-                with st.container(border=True):
-                    if melhor_dia_cadastro:
-                            st.metric("Melhor Dia de Cadastros", quantidade_cadastro, f"Dia {melhor_dia_cadastro.strftime('%d/%m/%Y')}")
-                    else:
-                        st.metric("Melhor Dia de Cadastros", "Sem dados")
-
+        # with st.expander("Melhor TMO e Quantidade de Cadastro"):
+        #     col1, col2 = st.columns(2)
+        #     with col1:
+        #         with st.container(border=True):
+        #             if melhor_dia_tmo and melhor_tmo:
+        #                 formatted_tmo = format_timedelta(melhor_tmo)
+        #                 st.metric("Melhor TMO", formatted_tmo, f"Dia {melhor_dia_tmo.strftime('%d/%m/%Y')}")
+        #             else:
+        #                 st.metric("Melhor TMO", "Sem dados")
+        #     with col2:
+        #         with st.container(border=True):
+        #             if melhor_dia_cadastro:
+        #                     st.metric("Melhor Dia de Cadastros", quantidade_cadastro, f"Dia {melhor_dia_cadastro.strftime('%d/%m/%Y')}")
+        #             else:
+        #                 st.metric("Melhor Dia de Cadastros", "Sem dados")
         # Exibe o DataFrame estilizado com as filas realizadas pelo analista
+        
         with st.container(border=True):
-            st.subheader(f"Filas Realizadas")
+            st.subheader(f"Tempo Médio por Fila")
             calcular_e_exibir_tmo_por_fila(
                 df_analista=df_analista, 
                 analista_selecionado=analista_selecionado, 
-                format_timedelta=format_timedelta, 
+                format_timedelta_hms=format_timedelta_hms, 
                 st=st
             )
-            
-        with st.expander("TMO por Fila - Cadastro e Atualização"):
-            calcular_e_exibir_tmo_cadastro_atualizacao_por_fila(df_analista, format_timedelta_hms, st)
+
+        # with st.expander("TMO por Fila - Cadastro e Atualização"):
+        #     calcular_e_exibir_tmo_cadastro_atualizacao_por_fila(df_analista, format_timedelta_hms, st)
             
         with st.expander("Tempo Ocioso"):
                 st.subheader(f"Tempo Ocioso")

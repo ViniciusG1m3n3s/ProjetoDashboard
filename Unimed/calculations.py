@@ -35,28 +35,18 @@ def load_data(usuario):
     return df_total
 
 def save_data(df, usuario):
-    parquet_file = f'dados_acumulados_{usuario}.parquet'
+    parquet_file = f'dados_acumulados_{usuario}.parquet'  # Nome do arquivo específico do usuário
 
-    # Remove a coluna 'ID NIP' (de forma robusta)
-    df = df.loc[:, ~(df.columns.str.upper().str.strip() == 'ID NIP')]
-    
-    df = df.loc[:, ~(df.columns.str.upper().str.strip() == 'M.O.')]
-
-    # Garante que a coluna 'Justificativa' exista
+    # Certifique-se de que a coluna 'Justificativa' existe antes de salvar
     if 'Justificativa' not in df.columns:
-        df['Justificativa'] = ""
+        df['Justificativa'] = ""  # Se não existir, adiciona a coluna com valores vazios
 
-    # Remove registros automáticos
+    # Remove registros com 'USUÁRIO QUE CONCLUIU A TAREFA' igual a 'robohub_amil'
     if 'USUÁRIO QUE CONCLUIU A TAREFA' in df.columns:
-        df = df[
-            (df['USUÁRIO QUE CONCLUIU A TAREFA'].notna()) &
-            (df['USUÁRIO QUE CONCLUIU A TAREFA'].str.lower() != 'robohub_amil')
-        ]
-
+        df = df[(df['USUÁRIO QUE CONCLUIU A TAREFA'] != 'robohub_amil') & (df['USUÁRIO QUE CONCLUIU A TAREFA'].notnull())]
+    
     # Salva o DataFrame no formato Parquet
     df.to_parquet(parquet_file, index=False)
-
-    return df
 
 def calcular_tmo_por_dia(df):
     df['Dia'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA']).dt.date
@@ -270,7 +260,7 @@ def calcular_metrica_analista(df_analista):
     df_analista_filtrado = df_analista[df_analista['FILA'] != "Desconhecida"]
 
     # Filtrar os registros com status "CADASTRADO", "ATUALIZADO" e "REALIZADO"
-    df_filtrados = df_analista_filtrado[df_analista_filtrado['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO', 'REALIZADO'])]
+    df_filtrados = df_analista_filtrado[df_analista_filtrado['SITUAÇÃO DA TAREFA'].isin(['Finalizada'])]
 
     # Converter "TEMPO MÉDIO OPERACIONAL" para minutos
     df_filtrados['TEMPO_MÉDIO_MINUTOS'] = df_filtrados['TEMPO MÉDIO OPERACIONAL'].dt.total_seconds() / 60
@@ -279,12 +269,12 @@ def calcular_metrica_analista(df_analista):
     df_filtrados = df_filtrados[~((df_filtrados['FILA'] == 'DÚVIDA') & (df_filtrados['TEMPO_MÉDIO_MINUTOS'] > 60))]
 
     # Calcula totais conforme os filtros de status
-    total_finalizados = len(df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'CADASTRADO'])
+    total_finalizados = len(df_filtrados[df_filtrados['FINALIZAÇÃO'] != 'FORA DO ESCOPO'])
     total_realizados = len(df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'REALIZADO'])
     total_atualizado = len(df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'ATUALIZADO'])
 
     # Calcula o tempo total para cada tipo de tarefa
-    tempo_total_cadastrado = df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'CADASTRADO']['TEMPO MÉDIO OPERACIONAL'].sum()
+    tempo_total_cadastrado = df_filtrados[df_filtrados['FINALIZAÇÃO'] != 'FORA DO ESCOPO']['TEMPO MÉDIO OPERACIONAL'].sum()
     tempo_total_atualizado = df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'ATUALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
     tempo_total_realizado = df_filtrados[df_filtrados['FINALIZAÇÃO'] == 'REALIZADO']['TEMPO MÉDIO OPERACIONAL'].sum()
 
@@ -739,7 +729,17 @@ def calcular_e_exibir_tmo_cadastro_atualizacao_por_fila (df_analista, format_tim
     else:
         st.warning("As colunas necessárias ('FILA' e 'FINALIZAÇÃO') não foram encontradas no DataFrame.")
 
-def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta, st):
+def format_timedelta_hms(td):
+    """
+    Formata um timedelta para o formato hh:mm:ss.
+    """
+    total_seconds = int(td.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_timedelta_hms, st):
     """
     Calcula e exibe o TMO médio por fila, junto com a quantidade de tarefas realizadas, 
     para um analista específico, na dashboard Streamlit.
@@ -761,7 +761,7 @@ def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_tim
         ).reset_index()
 
         # Converte o TMO médio para minutos e segundos
-        carteiras_analista['TMO_médio'] = carteiras_analista['TMO_médio'].apply(format_timedelta)
+        carteiras_analista['TMO_médio'] = carteiras_analista['TMO_médio'].apply(format_timedelta_hms)
 
         # Renomeia as colunas
         carteiras_analista = carteiras_analista.rename(columns={
@@ -784,34 +784,28 @@ def calcular_e_exibir_tmo_por_fila(df_analista, analista_selecionado, format_tim
         st.dataframe(styled_df, hide_index=True, use_container_width=True)
 
 def calcular_tmo_por_mes(df):
-    # Converter coluna de tempo para timedelta se necessário
+    # Converter coluna de tempo de análise para timedelta, se necessário
     if df['TEMPO MÉDIO OPERACIONAL'].dtype != 'timedelta64[ns]':
         df['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
-
-    # Converter coluna de data corretamente
-    df['DATA DE CONCLUSÃO DA TAREFA'] = pd.to_datetime(df['DATA DE CONCLUSÃO DA TAREFA'], errors='coerce')
-
-    # Remover registros sem data válida
-    df = df[df['DATA DE CONCLUSÃO DA TAREFA'].notna()]
-
-    # Extrair AnoMes no formato de período (ano-mês)
+    
+    # Adicionar coluna com ano e mês extraído da coluna 'Próximo'
     df['AnoMes'] = df['DATA DE CONCLUSÃO DA TAREFA'].dt.to_period('M')
-
-    # Filtrar protocolos finalizados
+    
+    # Filtrar apenas os protocolos com status 'FINALIZADO'
     df_finalizados = df[df['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO', 'REALIZADO'])]
-
-    # Agrupar e calcular somatório e média
+    
+    # Agrupar por AnoMes e calcular o TMO
     df_tmo_mes = df_finalizados.groupby('AnoMes').agg(
         Tempo_Total=('TEMPO MÉDIO OPERACIONAL', 'sum'),
         Total_Protocolos=('TEMPO MÉDIO OPERACIONAL', 'count')
     ).reset_index()
-
-    # Calcular TMO médio em minutos
+    
+    # Calcular o TMO em minutos
     df_tmo_mes['TMO'] = (df_tmo_mes['Tempo_Total'] / pd.Timedelta(minutes=1)) / df_tmo_mes['Total_Protocolos']
-
-    # Formatar AnoMes como "Abril de 2024"
+    
+    # Converter a coluna AnoMes para datetime e formatar como "Mês XX de Ano"
     df_tmo_mes['AnoMes'] = df_tmo_mes['AnoMes'].dt.to_timestamp().dt.strftime('%B de %Y').str.capitalize()
-
+    
     return df_tmo_mes[['AnoMes', 'TMO']]
 
 # Função de formatação
@@ -1033,7 +1027,7 @@ def calcular_grafico_tmo_analista_por_mes(df_analista):
     if not pd.api.types.is_timedelta64_dtype(df_analista['TEMPO MÉDIO OPERACIONAL']):
         df_analista['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df_analista['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
 
-    df_analista['AnoMes'] = df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.to_period('M').astype(str)
+    df_analista['AnoMes'] = df_analista['DATA DE CONCLUSÃO DA TAREFA'].dt.to_period('M')
 
     df_geral = df_analista[df_analista['FINALIZAÇÃO'].isin(['CADASTRADO', 'ATUALIZADO', 'REALIZADO'])]
     df_cadastro = df_analista[df_analista['FINALIZAÇÃO'] == 'CADASTRADO']
@@ -1186,7 +1180,9 @@ def exibir_grafico_tmo_analista_por_mes(df_analista, analista_selecionado):
     df_tmo_formatado = df_tmo_mes_filtrado[['AnoMes', 'TMO_Geral_Formatado', 'TMO_Cadastro_Formatado', 'TMO_Atualizacao_Formatado']]
     df_tmo_formatado.columns = ['AnoMes', 'TMO Geral', 'TMO Cadastro', 'TMO Atualização']
     st.dataframe(df_tmo_formatado, use_container_width=True, hide_index=True)
-    
+
+    return df_tmo_formatado
+
 def calcular_tmo_personalizado(df):
     """
     Calcula o TMO considerando as regras específicas para cada tipo de tarefa.

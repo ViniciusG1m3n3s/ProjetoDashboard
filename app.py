@@ -39,5 +39,8 @@ else:
     elif dominio == "amil":
         dashboard_oficios = importlib.import_module("Amil.dashboard")    
         dashboard_oficios.dashboard()
+    elif dominio == "unimed":
+        dashboard_oficios = importlib.import_module("Unimed.dashboard")    
+        dashboard_oficios.dashboard()
     else:
         st.error("Usuário não autorizado para visualizar o dashboard.")
