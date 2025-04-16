@@ -37,10 +37,8 @@ def load_data(usuario):
 def save_data(df, usuario):
     parquet_file = f'dados_acumulados_{usuario}.parquet'
 
-    # Remove a coluna 'ID NIP' (de forma robusta)
-    df = df.loc[:, ~(df.columns.str.upper().str.strip() == 'ID NIP')]
-    
-    df = df.loc[:, ~(df.columns.str.upper().str.strip() == 'M.O.')]
+    # Remove colunas desnecessárias
+    df = df.loc[:, ~(df.columns.str.upper().str.strip().isin(['ID NIP', 'M.O.']))]
 
     # Garante que a coluna 'Justificativa' exista
     if 'Justificativa' not in df.columns:
@@ -53,7 +51,25 @@ def save_data(df, usuario):
             (df['USUÁRIO QUE CONCLUIU A TAREFA'].str.lower() != 'robohub_amil')
         ]
 
-    # Salva o DataFrame no formato Parquet
+    # 🔄 Padronização de TMO
+    if 'TEMPO MÉDIO OPERACIONAL' in df.columns and 'FINALIZAÇÃO' in df.columns:
+        df['TEMPO MÉDIO OPERACIONAL'] = pd.to_timedelta(df['TEMPO MÉDIO OPERACIONAL'], errors='coerce')
+
+        # Para CADASTRADO: <19min → 20min
+        cond_cadastrado_menor = (df['FINALIZAÇÃO'] == 'CADASTRADO') & (df['TEMPO MÉDIO OPERACIONAL'] < pd.Timedelta(minutes=19))
+        df.loc[cond_cadastrado_menor, 'TEMPO MÉDIO OPERACIONAL'] = pd.Timedelta(minutes=20)
+
+        # Para ATUALIZADO: <3min → 3min | >15min → 15min
+        cond_atualizado_menor = (df['FINALIZAÇÃO'] == 'ATUALIZADO') & (df['TEMPO MÉDIO OPERACIONAL'] < pd.Timedelta(minutes=3))
+        cond_atualizado_maior = (df['FINALIZAÇÃO'] == 'ATUALIZADO') & (df['TEMPO MÉDIO OPERACIONAL'] > pd.Timedelta(minutes=15))
+        df.loc[cond_atualizado_menor, 'TEMPO MÉDIO OPERACIONAL'] = pd.Timedelta(minutes=3)
+        df.loc[cond_atualizado_maior, 'TEMPO MÉDIO OPERACIONAL'] = pd.Timedelta(minutes=15)
+
+        # Para todos os casos: >2h → 2h
+        cond_geral_maior = df['TEMPO MÉDIO OPERACIONAL'] > pd.Timedelta(hours=2)
+        df.loc[cond_geral_maior, 'TEMPO MÉDIO OPERACIONAL'] = pd.Timedelta(hours=2)
+
+    # Salva no formato Parquet
     df.to_parquet(parquet_file, index=False)
 
     return df
